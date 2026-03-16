@@ -467,40 +467,41 @@ function AppShell() {
 
     return (
         <>
+            <Toaster
+                position="bottom-center"
+                toastOptions={{
+                    duration: 2000,
+                    style: {
+                        background: '#202020',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '99px',
+                        fontFamily: "'Montserrat', sans-serif",
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        padding: '10px 20px',
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.20)',
+                        letterSpacing: '0.1px',
+                        marginBottom: '70px',
+                    },
+                    success: {
+                        iconTheme: {
+                            primary: '#c9f158',
+                            secondary: '#202020',
+                        },
+                    },
+                    error: {
+                        iconTheme: {
+                            primary: '#EF4444',
+                            secondary: '#ffffff',
+                        },
+                    },
+                }}
+            />
             <FeedbackRenderer />
             <div className="pages">
                 <main className="screen">
-                    <Toaster
-                        position="bottom-center"
-                        toastOptions={{
-                            duration: 2000,
-                            style: {
-                                background: '#202020',
-                                color: '#ffffff',
-                                border: 'none',
-                                borderRadius: '99px',
-                                fontFamily: "'Montserrat', sans-serif",
-                                fontSize: '13px',
-                                fontWeight: 600,
-                                padding: '10px 20px',
-                                boxShadow: '0 8px 24px rgba(0,0,0,0.20)',
-                                letterSpacing: '0.1px',
-                                marginBottom: '70px',
-                            },
-                            success: {
-                                iconTheme: {
-                                    primary: '#c9f158',
-                                    secondary: '#202020',
-                                },
-                            },
-                            error: {
-                                iconTheme: {
-                                    primary: '#EF4444',
-                                    secondary: '#ffffff',
-                                },
-                            },
-                        }}
-                    />
+
                     {error && (
                         <div style={{
                             margin: '10px 16px', padding: '10px 14px',
@@ -531,8 +532,22 @@ function AppShell() {
 function App() {
     const [showSplash, setShowSplash] = useState(true);
 
+    // In your App() function, add this useEffect:
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                // iOS resumes here — clear any stuck toasts
+                toast.dismiss();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, []);
+
     useEffect(() => {
         const handleOnline = () => {
+            toast.dismiss('network-status');
             toast.success("Back online!", {
                 id: 'network-status',
                 duration: 3000,
