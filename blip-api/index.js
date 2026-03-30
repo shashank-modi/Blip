@@ -11,6 +11,7 @@ import dashboardRouter from './routes/dashboard.js';
 import investmentsRouter from './routes/investments.js';
 import incomeRouter from './routes/income.js';
 import shoppingRouter from './routes/shopping.js';
+import friendsRouter from './routes/friends.js';
 
 process.on('unhandledRejection', err => console.error('Unhandled rejection:', err));
 dotenv.config();
@@ -32,6 +33,7 @@ app.use('/api/dashboard', dashboardRouter);
 app.use('/api/investments', investmentsRouter);
 app.use('/api/income', incomeRouter);
 app.use('/api/shopping', shoppingRouter);
+app.use('/api', friendsRouter);
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 app.get('/health/db', async (req, res, next) => {

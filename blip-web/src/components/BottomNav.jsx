@@ -11,6 +11,15 @@ const TABS = [
         ),
     },
     {
+        id: 'friends',
+        label: 'Friends',
+        icon: (active) => (
+            <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth={active ? "2.5" : "1.8"} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+        ),
+    },
+    {
         id: 'home',
         label: 'Home',
         icon: (active) => (
@@ -23,28 +32,12 @@ const TABS = [
         id: 'profile',
         label: 'Profile',
         icon: (active) => (
-            <svg
-                width="20"
-                height="20"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={active ? "2.5" : "1.8"}
-                viewBox="0 0 24 24"
-            >
-                <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M12 11a4 4 0 100-8 4 4 0 000 8z"
-                />
-                <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M6 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"
-                />
+            <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth={active ? "2.5" : "1.8"} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 11a4 4 0 100-8 4 4 0 000 8z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 21v-2a4 4 0 014-4h4a4 4 0 014 4v2" />
             </svg>
         ),
     },
-
 ];
 
 export default function BottomNav() {
@@ -59,40 +52,37 @@ export default function BottomNav() {
         <>
             <style>{`
                 .blip-nav {
-                    position: absolute;
-                    bottom: 18px;
+                    position: fixed;
+                    bottom: 24px;
                     left: 50%;
                     transform: translateX(-50%);
-                    width: calc(100% - 48px);
-                    max-width: 320px;
-                    height: 62px;
+                    width: calc(100% - 36px); /* Slightly wider for 4 icons */
+                    max-width: 360px; /* Adjusted from 320px */
+                    height: 67px;
                     background: rgba(255, 255, 255, 0.88);
                     backdrop-filter: blur(20px);
                     -webkit-backdrop-filter: blur(20px);
                     border-radius: 99px;
                     border: 1px solid rgba(255,255,255,0.9);
-                    box-shadow:
-                        0 8px 32px rgba(0,0,0,0.10),
-                        0 2px 8px rgba(0,0,0,0.06),
-                        0 0 0 1px rgba(0,0,0,0.04);
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.10);
                     display: flex;
                     align-items: center;
-                    padding: 5px;
+                    padding: 4px;
                     z-index: 100;
-                    user-select: none;
                 }
 
                 .blip-nav-bubble {
                     position: absolute;
                     top: 5px;
                     height: calc(100% - 10px);
-                    width: calc(33.333% - 4px);
+                    /* MAGIC MATH: 100% / 4 items = 25% */
+                    width: calc(25% - 4px); 
                     background: var(--indigo);
                     border-radius: 99px;
-                    box-shadow: 0 2px 8px #05050593;
-                    transition: transform 0.42s cubic-bezier(0.34, 1.48, 0.64, 1);
+                    box-shadow: 0 2px 8px #05050574;
+                    transition: transform 0.4s cubic-bezier(0.34, 1.48, 0.64, 1);
                     pointer-events: none;
-                    left: 2px;
+                    left: 7px;
                 }
 
                 .blip-nav-tab {
@@ -107,41 +97,23 @@ export default function BottomNav() {
                     position: relative;
                     z-index: 1;
                     border-radius: 99px;
-                    -webkit-tap-highlight-color: transparent;
-                    transition: transform 0.12s ease;
-                }
-
-                .blip-nav-tab:active {
-                    transform: scale(0.88);
-                }
-
-                .blip-nav-icon {
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    transition: color 0.2s ease, transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
-                }
-
-                .blip-nav-icon.active-icon {
-                    transform: translateY(-1px) scale(1.08);
+                    transition: transform 0.1s ease;
                 }
 
                 .blip-nav-label {
                     font-family: 'Montserrat', sans-serif;
-                    font-size: 9.5px;
+                    font-size: 9px; /* Shrunk slightly for fit */
                     font-weight: 700;
-                    letter-spacing: 0.15px;
-                    transition: color 0.2s ease, opacity 0.2s ease;
                     line-height: 1;
                 }
             `}</style>
 
             <div className="blip-nav">
-                {/* Sliding bubble — translateX by slot width × index */}
                 <div
                     className="blip-nav-bubble"
                     style={{
-                        transform: `translateX(calc(${bubbleIndex} * (100% + 4px)))`,
+                        /* Transform moves by 100% of the bubble width per index */
+                        transform: `translateX(calc(${bubbleIndex} * 100%))`,
                     }}
                 />
 
