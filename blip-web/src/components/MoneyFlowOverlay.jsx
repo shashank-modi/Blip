@@ -29,7 +29,7 @@ export default function MoneyFlowOverlay({ active, type, amount, onComplete, var
 
         const t = setTimeout(() => {
             onComplete?.();
-        }, 2000);
+        }, 1500);
 
         return () => clearTimeout(t);
     }, [active, type, onComplete, variant]);

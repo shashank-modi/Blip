@@ -4,6 +4,7 @@ import BottomSheet from '../components/BottomSheet';
 import SwipeableItem from '../components/SwipeableItem';
 import DayInput from '../components/DayInput';
 import { formatCurrency } from '../utils/format';
+import { motion } from 'framer-motion';
 import {
     Repeat, TrendingUp, ChevronRight, Clock, Zap,
     Coffee, Calendar, AlarmClock, GitCompare
@@ -538,7 +539,37 @@ export default function Investments() {
                 {activeTab === 'portfolio' && (
                     <div className="invest-month-box">
                         {Object.keys(groupedInvestments).length === 0 ? (
-                            <p style={{ textAlign: 'center', color: 'var(--text-3)', padding: '20px 0' }}>No investments yet.</p>
+                            <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                style={{
+                                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                                    padding: '15px 24px',
+                                    textAlign: 'center', marginTop: 12
+                                }}
+                            >
+                                <div style={{
+                                    background: '#c9f158', width: 48, height: 48, borderRadius: 16,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+                                    boxShadow: '0 8px 20px rgba(201, 241, 88, 0.2)'
+                                }}>
+                                    <TrendingUp size={22} color="#202020" strokeWidth={2.5} />
+                                </div>
+
+                                <div style={{
+                                    fontSize: 16, fontWeight: 800, color: '#202020',
+                                    marginBottom: 6, fontFamily: "'Montserrat', sans-serif"
+                                }}>
+                                    Future starts here
+                                </div>
+
+                                <div style={{
+                                    fontSize: 13, color: '#666', fontWeight: 500,
+                                    lineHeight: 1.5, maxWidth: 220
+                                }}>
+                                    Track your stocks, crypto, or mutual funds in one place to see your wealth grow.
+                                </div>
+                            </motion.div>
                         ) : Object.entries(groupedInvestments).map(([monthStr, group]) => (
                             <div key={monthStr}>
                                 <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-2)', marginBottom: 12, display: 'flex', justifyContent: 'space-between' }}>

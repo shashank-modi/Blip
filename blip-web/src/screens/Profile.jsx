@@ -1,62 +1,99 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom'; // Add this
 import { useUser, useClerk } from '@clerk/clerk-react';
 import { useApp } from '../store/AppContext';
 import EditRecurringSheet from '../components/EditRecurringSheet';
-import { LogOut, ChevronRight, Repeat, Code, Wallet, RotateCcw, Trash2, ChevronLeft, UserPen, Mail } from 'lucide-react';
+import FeedbackSheet from '../components/FeedbackSheet';
+import { LogOut, ChevronRight, Repeat, Code, Wallet, RotateCcw, Trash2, ChevronLeft, UserPen, Mail, Phone, MessageSquare, Share2 } from 'lucide-react';
 import { formatCurrency } from '../utils/format';
+import { motion } from 'framer-motion';
+import { toast } from 'react-hot-toast';
 
-// ─── BLIP CUSTOM DIALOG (Internal UI) ──────────────────────────────────
 function BlipDialog({ isOpen, onClose, title, message, isPrompt, defaultValue, onConfirm }) {
     const [val, setVal] = useState(defaultValue);
+
+    useEffect(() => {
+        if (isOpen) {
+            const originalStyle = window.getComputedStyle(document.body).overflow;
+            document.documentElement.style.overflow = 'hidden';
+            document.body.style.overflow = 'hidden';
+
+            return () => {
+                document.documentElement.style.overflow = '';
+                document.body.style.overflow = originalStyle;
+            };
+        }
+    }, [isOpen]);
 
     useEffect(() => { if (isOpen) setVal(defaultValue); }, [isOpen, defaultValue]);
 
     if (!isOpen) return null;
 
-    return (
-        <div style={{
-            position: 'fixed', inset: 0, zIndex: 10000,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: '20px', backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)'
-        }} onClick={onClose}>
-            <div
+    return createPortal(
+        <div
+            style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                width: '100vw',
+                height: '100vh',
+                zIndex: 9999,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '20px',
+                paddingBottom: '350px',
+                backgroundColor: 'rgba(0,0,0,0.75)',
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)',
+                touchAction: 'none'
+            }}
+            onClick={onClose}
+        >
+            <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
                 onClick={e => e.stopPropagation()}
                 style={{
-                    background: '#ffffff', borderRadius: '32px', padding: '32px 24px',
-                    width: '100%', maxWidth: '340px', border: '1px solid var(--border)',
-                    boxShadow: '0 20px 40px rgba(0,0,0,0.2)', textAlign: 'center'
+                    background: '#ffffff',
+                    borderRadius: '32px',
+                    padding: '32px 24px',
+                    width: '100%',
+                    maxWidth: '350px',
+                    boxShadow: '0 30px 60px rgba(0,0,0,0.4)',
+                    textAlign: 'center',
+                    position: 'relative',
                 }}
             >
-                <div style={{ fontSize: '20px', fontWeight: 800, color: '#202020', marginBottom: '8px' }}>
+                <div style={{ fontSize: '22px', fontWeight: 900, color: '#202020', marginBottom: '8px', letterSpacing: '-0.5px' }}>
                     {title}
                 </div>
-                <div style={{ fontSize: '14px', color: '#202020a3', lineHeight: 1.5, marginBottom: '24px' }}>
+                <div style={{ fontSize: '15px', color: '#666', lineHeight: 1.5, marginBottom: '28px' }}>
                     {message}
                 </div>
 
                 {isPrompt && (
-                    <div style={{ marginBottom: '24px' }}>
+                    <div style={{ marginBottom: '32px' }}>
                         <input
                             type="number"
+                            inputMode="decimal"
                             autoFocus
                             value={val}
                             onChange={e => setVal(e.target.value)}
                             style={{
-                                width: '100%', border: 'none', borderBottom: '2px solid #202020',
-                                background: 'transparent', padding: '12px 0', fontSize: '24px',
+                                width: '100%', border: 'none', borderBottom: '2.5px solid #202020',
+                                background: 'transparent', padding: '12px 0', fontSize: '32px',
                                 fontWeight: 800, color: '#202020', textAlign: 'center', outline: 'none'
                             }}
                         />
-                        <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--text-3)', marginTop: '8px', textTransform: 'uppercase' }}>
-                            Enter Amount
-                        </div>
                     </div>
                 )}
 
                 <div style={{ display: 'flex', gap: '12px' }}>
                     <button
                         onClick={onClose}
-                        style={{ flex: 1, padding: '16px', borderRadius: '16px', border: 'none', background: 'var(--bg)', color: '#202020', fontWeight: 700, fontSize: '14px' }}
+                        style={{ flex: 1, padding: '16px', borderRadius: '16px', border: 'none', background: '#f2f3f5', color: '#202020', fontWeight: 700, fontSize: '14px' }}
                     >
                         Cancel
                     </button>
@@ -67,12 +104,12 @@ function BlipDialog({ isOpen, onClose, title, message, isPrompt, defaultValue, o
                         Confirm
                     </button>
                 </div>
-            </div>
-        </div>
+            </motion.div>
+        </div>,
+        document.body
     );
 }
 
-// ─── LEDGER COMPONENTS ──────────────────────────────────────────────────
 function getDaySuffix(day) {
     if (day >= 11 && day <= 13) return 'th';
     switch (day % 10) {
@@ -135,15 +172,15 @@ function AutopayScreen({ recurring, onBack, onEdit, onDelete }) {
     );
 }
 
-// ─── MAIN PROFILE ───────────────────────────────────────────────────────
 export default function Profile() {
     const { user: clerkUser } = useUser();
     const { signOut } = useClerk();
-    const { user, recurring, deleteRecurring, updateRecurringItem, updateUserBudget } = useApp();
+    const { user, recurring, deleteRecurring, updateRecurringItem, updateUserBudget, updatePhone, version } = useApp();
 
     const [modalConfig, setModalConfig] = useState({ isOpen: false, title: '', message: '', isPrompt: false, defaultValue: '', onConfirm: () => { } });
     const [editingRecurring, setEditingRecurring] = useState(null);
     const [showAutopay, setShowAutopay] = useState(false);
+    const [showFeedback, setShowFeedback] = useState(false);
 
     const openModal = (cfg) => setModalConfig({ ...cfg, isOpen: true });
     const closeModal = () => setModalConfig(p => ({ ...p, isOpen: false }));
@@ -156,8 +193,50 @@ export default function Profile() {
         onConfirm: (v) => { if (v && !isNaN(Number(v)) && Number(v) > 0) updateUserBudget(v); }
     });
 
+    const handleEditPhone = () => openModal({
+        title: 'Phone Number',
+        message: 'Edit your phone number',
+        isPrompt: true,
+        defaultValue: user.phone,
+        onConfirm: (v) => { if (v && v.length === 10) updatePhone(v); }
+    });
+
     const resetBudgetPrompts = () => {
         Object.keys(localStorage).filter(k => k.startsWith('blip_budget_prompt_')).forEach(k => localStorage.removeItem(k));
+    };
+
+    const handleShareApp = async () => {
+        const shareData = {
+            title: 'blip. — track expenses & split bills',
+            text: 'I use blip to manage expenses and settle debts with friends. Check it out!',
+            url: 'https://blip-eta.vercel.app/',
+        };
+
+        const fallbackCopy = async () => {
+            try {
+                await navigator.clipboard.writeText(shareData.url);
+            } catch {
+                const textarea = document.createElement('textarea');
+                textarea.value = shareData.url;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+            }
+            toast.success('Link copied!');
+        };
+
+        try {
+            if (navigator.share) {
+                await navigator.share(shareData);
+            } else {
+                await fallbackCopy();
+            }
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                await fallbackCopy();
+            }
+        }
     };
 
     if (showAutopay) return (
@@ -181,20 +260,63 @@ export default function Profile() {
                 <LedgerBox title="Personal Info" rows={[
                     { icon: <UserPen size={22} />, label: 'Name', sub: user.name || 'User', noChevron: true },
                     { icon: <Mail size={22} />, label: 'Email', sub: user.email || clerkUser?.primaryEmailAddress?.emailAddress || 'Not set', noChevron: true },
+                    { icon: <Phone size={22} />, label: 'Phone', sub: user.phone || 'Not set', onClick: handleEditPhone },
                     { icon: <Wallet size={22} />, label: 'Monthly Budget', sub: 'Current spending limit', value: `₹${formatCurrency(user.budget || 0)}`, onClick: handleEditBudget }
                 ]} />
 
-                <LedgerBox title="Account Info" rows={[
-                    { icon: <Repeat size={18} />, label: 'Manage Auto Pay', sub: `${recurring.length} active schedules`, onClick: () => setShowAutopay(true) },
-                    { icon: <RotateCcw size={18} />, label: 'Reset Budget Prompt', sub: 'Show monthly check-in again', onClick: resetBudgetPrompts, noChevron: true, action: <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--indigo)', background: 'var(--bg)', padding: '5px 12px', borderRadius: '8px' }}>RESET</div> },
-                    { icon: <Code size={18} />, label: 'Version', badge: 'v1.0.2', noChevron: true }
-                ]} />
+                <LedgerBox
+                    title="Account Info"
+                    rows={[
+                        {
+                            icon: <Repeat size={18} />,
+                            label: 'Manage Auto Pay',
+                            sub: `${recurring.length} active schedules`,
+                            onClick: () => setShowAutopay(true)
+                        },
+                        {
+                            icon: <RotateCcw size={18} />,
+                            label: 'Reset Budget Prompt',
+                            sub: 'Show monthly check-in again',
+                            onClick: resetBudgetPrompts,
+                            noChevron: true,
+                            action: <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--indigo)', background: 'var(--bg)', padding: '5px 12px', borderRadius: '8px' }}>RESET</div>
+                        }
+                    ]}
+                />
+
+                <LedgerBox
+                    title="App & Support"
+                    rows={[
+                        {
+                            icon: <Share2 size={18} />,
+                            label: 'Share App',
+                            sub: 'Invite friends to blip.',
+                            onClick: handleShareApp
+                        },
+                        {
+                            icon: <MessageSquare size={18} />,
+                            label: 'Send Feedback',
+                            sub: 'Tell us what to build next',
+                            onClick: () => setShowFeedback(true)
+                        },
+                        {
+                            icon: <Code size={18} />,
+                            label: 'Version',
+                            badge: version,
+                            noChevron: true
+                        }
+                    ]}
+                />
 
                 <LedgerBox title="Privacy & Security" rows={[
                     { icon: <LogOut size={18} />, label: 'Sign Out', danger: true, onClick: () => openModal({ title: 'Sign Out', message: 'Are you sure you want to sign out of Blip?', onConfirm: () => signOut() }), noChevron: true }
                 ]} />
                 <div style={{ height: 40 }} />
             </div>
+            <FeedbackSheet
+                isOpen={showFeedback}
+                onClose={() => setShowFeedback(false)}
+            />
             <BlipDialog {...modalConfig} onClose={closeModal} />
         </>
     );

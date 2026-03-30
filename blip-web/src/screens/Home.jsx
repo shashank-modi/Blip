@@ -5,7 +5,10 @@ import BottomSheet from '../components/BottomSheet';
 import DayInput from '../components/DayInput';
 import EditExpenseSheet from '../components/EditExpenseSheet';
 import EditRecurringSheet from '../components/EditRecurringSheet';
-import { Coffee, Car, ShoppingBag, Grid, CheckCircle2, Home as HomeIcon, HeartCrack, Briefcase, Gift, ArrowUpCircle, Plus, ArrowUpRight, LayoutDashboard, ChevronRight } from 'lucide-react';
+import { motion } from 'framer-motion';
+// import GuidedTour from '../components/GuidedTour';
+
+import { Receipt, Repeat, Coffee, Car, ShoppingBag, Grid, CheckCircle2, Home as HomeIcon, HeartCrack, Briefcase, Gift, ArrowUpCircle, Plus, ArrowUpRight, LayoutDashboard, ChevronRight } from 'lucide-react';
 
 const parseExpenseInput = (input) => {
     const parts = input.trim().split(/\s+/);
@@ -26,6 +29,10 @@ export default function Home() {
         getSpentThisMonth, deleteExpense, updateExpense, addIncome,
         shoppingList, addShoppingItem, updateShoppingItem, deleteShoppingItem
     } = useApp();
+
+
+    const [showTour, setShowTour] = useState(true);
+
 
     const [nlpInput, setNlpInput] = useState('');
     const [selectedCat, setSelectedCat] = useState('');
@@ -207,7 +214,7 @@ export default function Home() {
                         <span>{user.name?.split(' ')[0]}</span>
                     </div>
                     {/* Live budget remaining chip */}
-                    <div style={{
+                    <div id='tour-budget' style={{
                         marginTop: 4,
                         display: 'inline-flex', alignItems: 'center', gap: 6,
                         background: '#f2f3f5',
@@ -221,10 +228,10 @@ export default function Home() {
                     </div>
                 </div>
                 <div className="top-bar-icons">
-                    <div className="icon-btn" onClick={() => setCurrentScreen('logs')}>
+                    <div id='tour-transaction-console' className="icon-btn" onClick={() => setCurrentScreen('logs')}>
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
                     </div>
-                    <div className="icon-btn" onClick={() => setCurrentScreen('dashboard')}>
+                    <div id='tour-dashboard' className="icon-btn" onClick={() => setCurrentScreen('dashboard')}>
                         <LayoutDashboard size={24} />
                     </div>
                 </div>
@@ -232,7 +239,7 @@ export default function Home() {
 
             <div className="home-content">
                 {/* LOG EXPENSE CARD */}
-                <div className="log-card">
+                <div className="log-card" id="tour-nlp">
                     <div className="amount-input-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
                         <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
                             <span className="rupee-sign">₹</span>
@@ -401,7 +408,7 @@ export default function Home() {
                         }} />
 
                         {/* Top row */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative', zIndex: 1 }}>
+                        <div id="tour-shopping-list" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative', zIndex: 1 }}>
                             <div>
                                 <div style={{ fontSize: 16, fontWeight: 800, color: '#f2f3f5', letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 4 }}>
                                     Shopping Bag
@@ -450,6 +457,7 @@ export default function Home() {
                 <div className="section-header" style={{ marginTop: '24px' }}>
                     <div className="section-title">Scheduled Payments</div>
                     <div
+                        id="tour-scheduled-payment"
                         className="add-recurring-btn"
                         onClick={() => setIsSheetOpen(true)}
                         style={{ background: 'var(--indigo-light)', color: 'var(--indigo)', padding: '6px 12px', borderRadius: '10px', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}
@@ -479,7 +487,31 @@ export default function Home() {
                         boxShadow: 'var(--shadow)'
                     }}>
                         {recurring.length === 0 ? (
-                            <p style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>No recurring expenses set.</p>
+                            <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                style={{
+                                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                                    padding: '20px 24px',
+                                    textAlign: 'center', marginTop: 12
+                                }}
+                            >
+                                <div style={{
+                                    background: '#c9f158', width: 48, height: 48, borderRadius: 16,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+                                    boxShadow: '0 8px 20px rgba(201, 241, 88, 0.2)'
+                                }}>
+                                    <Repeat size={22} color="#202020" strokeWidth={2.5} />
+                                </div>
+
+                                <div style={{ fontSize: 16, fontWeight: 800, color: '#202020', marginBottom: 6, fontFamily: "'Montserrat', sans-serif" }}>
+                                    Nothing scheduled yet
+                                </div>
+
+                                <div style={{ fontSize: 13, color: '#666', fontWeight: 500, lineHeight: 1.5, maxWidth: 220 }}>
+                                    Add your rent or subscriptions to see them tracked automatically.
+                                </div>
+                            </motion.div>
                         ) : unpaidRecurring.map((r, idx) => {
                             const isUrgent = Number(r.dueDate) < new Date().getDate();
                             return (
@@ -599,7 +631,37 @@ export default function Home() {
                             ))}
                         </div>
                     ) : (
-                        <p style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>No recent payments.</p>
+                        <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            style={{
+                                display: 'flex', flexDirection: 'column', alignItems: 'center',
+                                padding: '20px 24px',
+                                textAlign: 'center', marginTop: 12
+                            }}
+                        >
+                            <div style={{
+                                background: '#c9f158', width: 48, height: 48, borderRadius: 16,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+                                boxShadow: '0 8px 20px rgba(201, 241, 88, 0.2)'
+                            }}>
+                                <Receipt size={22} color="#202020" strokeWidth={2.5} />
+                            </div>
+
+                            <div style={{
+                                fontSize: 16, fontWeight: 800, color: '#202020',
+                                marginBottom: 6, fontFamily: "'Montserrat', sans-serif"
+                            }}>
+                                Quiet in here
+                            </div>
+
+                            <div style={{
+                                fontSize: 13, color: '#666', fontWeight: 500,
+                                lineHeight: 1.5, maxWidth: 220
+                            }}>
+                                Start spending or settle up with friends to see your activity history.
+                            </div>
+                        </motion.div>
                     )}
                 </div>
 
@@ -629,7 +691,7 @@ export default function Home() {
                         </div>
                     </div>
                 ) : (
-                    <p style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>No expenses recorded this month.</p>
+                    <p style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontWeight: 500 }}>No expenses recorded this month.</p>
                 )}
 
                 <div style={{ height: '16px' }}></div>
@@ -1059,6 +1121,9 @@ export default function Home() {
                     </div>
                 )
             }
+            {/* {showTour && (
+                <GuidedTour onComplete={() => setShowTour(false)} />
+            )} */}
         </>
     );
 }

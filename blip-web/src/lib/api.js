@@ -54,7 +54,13 @@ const request = async (path, options = {}) => {
 export const api = {
     syncUser: (data) => request('/users/sync', { method: 'POST', body: JSON.stringify(data) }),
     getMe: () => request('/users/me'),
-    updateBudget: (budget) => request('/users/me/budget', { method: 'PATCH', body: JSON.stringify({ budget }) }),
+    updateBudget: (budget, phone) => request('/users/me/budget', {
+        method: 'PATCH',
+        body: JSON.stringify({ budget, phone })
+    }),
+    updatePhone: (phone) => request('/users/me/phone', { method: 'PATCH', body: JSON.stringify({ phone }) }),
+    updateUserVersion: (version) => request('/users/me/version', { method: 'PATCH', body: JSON.stringify({ version }) }),
+    updateOnboardingStatus: () => request('/users/me/onboarding', { method: 'PATCH' }),
 
     getExpenses: (month) => request(`/expenses${toQueryString({ month })}`),
     createExpense: (data) => request('/expenses', { method: 'POST', body: JSON.stringify(data) }),
@@ -81,5 +87,35 @@ export const api = {
     updateShoppingItem: (id, data) => request(`/shopping/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     deleteShoppingItem: (id) => request(`/shopping/${id}`, { method: 'DELETE' }),
 
-    getDashboardSummary: (month) => request(`/dashboard/summary${toQueryString({ month })}`)
+    getDashboardSummary: (month) => request(`/dashboard/summary${toQueryString({ month })}`),
+
+    // Friends API methods
+    searchByPhone: (phone) => request(`/users/search?phone=${phone}`),
+
+
+    getFriends: () => request('/friends'),
+    addFriend: (friendId) => request('/friends', { method: 'POST', body: JSON.stringify({ friendId }) }),
+    removeFriend: (friendId) => request(`/friends/${friendId}`, { method: 'DELETE' }),
+
+    getGroups: () => request('/groups'),
+    createGroup: (data) => request('/groups', { method: 'POST', body: JSON.stringify(data) }),
+    getGroup: (groupId) => request(`/groups/${groupId}`),
+    updateGroup: (groupId, data) => request(`/groups/${groupId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteGroup: (groupId) => request(`/groups/${groupId}`, { method: 'DELETE' }),
+    addMember: (groupId, userId) => request(`/groups/${groupId}/members`, { method: 'POST', body: JSON.stringify({ userId }) }),
+    removeMember: (groupId, userId) => request(`/groups/${groupId}/members/${userId}`, { method: 'DELETE' }),
+
+    getFriendExpenses: (friendId) => request(`/friends/${friendId}/expenses`),
+    addFriendExpense: (friendId, data) => request(`/friends/${friendId}/expenses`, { method: 'POST', body: JSON.stringify(data) }),
+    getGroupExpenses: (groupId) => request(`/groups/${groupId}/expenses`),
+    addGroupExpense: (groupId, data) => request(`/groups/${groupId}/expenses`, { method: 'POST', body: JSON.stringify(data) }),
+    editExpense: (expenseId, data) => request(`/social-expenses/${expenseId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteSocialExpense: (expenseId) => request(`/social-expenses/${expenseId}`, { method: 'DELETE' }),
+    deleteSocialPayment: (paymentId) => request(`/social-payments/${paymentId}`, { method: 'DELETE' }),
+
+    getFriendBalance: (friendId) => request(`/friends/${friendId}/balance`),
+    getGroupBalances: (groupId) => request(`/groups/${groupId}/balances`),
+
+    settleFriend: (friendId, amount) => request(`/friends/${friendId}/settle`, { method: 'POST', body: JSON.stringify({ amount }) }),
+    settleGroup: (groupId, toUserId, amount) => request(`/groups/${groupId}/settle`, { method: 'POST', body: JSON.stringify({ toUserId, amount }) }),
 };
