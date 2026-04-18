@@ -8,7 +8,7 @@ import EditRecurringSheet from '../components/EditRecurringSheet';
 import { motion } from 'framer-motion';
 // import GuidedTour from '../components/GuidedTour';
 
-import { Receipt, Repeat, Coffee, Car, ShoppingBag, Grid, CheckCircle2, Home as HomeIcon, HeartCrack, Briefcase, Gift, ArrowUpCircle, Plus, ArrowUpRight, LayoutDashboard, ChevronRight } from 'lucide-react';
+import { Receipt, Repeat, Coffee, Car, ShoppingBag, Grid, CheckCircle2, Home as HomeIcon, HeartCrack, Briefcase, Gift, ArrowUpCircle, Plus, ArrowUpRight, LayoutDashboard, ChevronRight, Clapperboard, BookHeart, Hospital, ChevronDownIcon} from 'lucide-react';
 
 const parseExpenseInput = (input) => {
     const parts = input.trim().split(/\s+/);
@@ -56,6 +56,8 @@ export default function Home() {
     const [editShoppingName, setEditShoppingName] = useState('');
     const [swooshingOutShoppingId, setSwooshingOutShoppingId] = useState(null);
     const [inputFocused, setInputFocused] = useState(false);
+    const [isCatSheetOpen, setIsCatSheetOpen] = useState(false);
+    const [customCatInput, setCustomCatInput] = useState('');
 
     const [recInput, setRecInput] = useState('');
     const [recCat, setRecCat] = useState('');
@@ -64,6 +66,9 @@ export default function Home() {
 
     const mainPreview = parseExpenseInput(nlpInput);
     const sheetPreview = parseExpenseInput(recInput);
+
+    const [selectedDate, setSelectedDate] = useState(new Date());
+    const [isDateSheetOpen, setIsDateSheetOpen] = useState(false);
 
     const spent = getSpentThisMonth();
     const budget = user.budget || 0;
@@ -100,7 +105,7 @@ export default function Home() {
     const allPaid = recurring.length > 0 && unpaidRecurring.length === 0;
 
     const handleSwipeLeftRecent = (id) => {
-        deleteExpense(id); // The toast notification is already handled in AppContext
+        deleteExpense(id);
     };
 
     const handleSwipeRightRecent = (exp) => {
@@ -109,7 +114,7 @@ export default function Home() {
 
     // --- Swipe Handlers for Scheduled Payments ---
     const handleRecSwipeLeft = (id) => {
-        deleteRecurring(id); // The toast notification is already handled in AppContext
+        deleteRecurring(id);
     };
 
     const handleRecSwipeRight = (rec) => {
@@ -118,9 +123,10 @@ export default function Home() {
 
     const handleAddExpense = (e) => {
         if (!nlpInput.trim()) return;
-        addExpenseNLP(nlpInput, selectedCat);
+        addExpenseNLP(nlpInput, selectedCat, selectedDate);
         setNlpInput('');
         setSelectedCat('');
+        setSelectedDate(new Date());
     };
 
     const handleAddIncome = () => {
@@ -185,6 +191,20 @@ export default function Home() {
         setEditShoppingName('');
     };
 
+    const formatDateLabel = (date) => {
+        const d = new Date(date);
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        
+        const compareDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+        if (compareDate.getTime() === today.getTime()) return 'Today';
+        if (compareDate.getTime() === yesterday.getTime()) return 'Yest';
+        
+        return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+    };
 
     const incomeSources = [
         { name: 'Salary', icon: <Briefcase size={16} /> },
@@ -193,12 +213,35 @@ export default function Home() {
         { name: 'Other', icon: <ArrowUpCircle size={16} /> }
     ];
 
+    const catBtnStyle = {
+    flexShrink: 0,
+    width: '92px',
+    height: '72px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '4px',
+    borderRadius: '16px',
+    transition: 'all 0.2s ease',
+};
+
     const catMap = [
-        { name: 'Food', icon: <Coffee size={20} /> },
-        { name: 'Transport', icon: <Car size={20} /> },
-        { name: 'Shopping', icon: <ShoppingBag size={20} /> },
-        { name: 'Housing', icon: <HomeIcon size={20} /> }
+    { name: 'Food', icon: <Coffee size={20} /> },
+    { name: 'Transport', icon: <Car size={20} /> },
+    { name: 'Shopping', icon: <ShoppingBag size={20} /> },
+    { name: 'Housing', icon: <HomeIcon size={20} /> },
+    { name: 'Entertainment', icon: <Clapperboard size={20} /> },
+    { name: 'Medical', icon: <Hospital size={20} /> },
+    { name: 'Bills', icon: <Receipt size={20} /> },
+    { name: 'Personal Care', icon: <BookHeart size={20} /> }
     ];
+
+    const getCategoryIcon = (catName) => {
+        const found = catMap.find(c => c.name === catName);
+        if (found) return found.icon;
+        return <Grid size={20} />;
+    };
 
     return (
         <>
@@ -241,7 +284,7 @@ export default function Home() {
                 {/* LOG EXPENSE CARD */}
                 <div className="log-card" id="tour-nlp">
                     <div className="amount-input-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', width: '100%', position: 'relative' }}>
                             <span className="rupee-sign">₹</span>
                             <input
                                 onFocus={() => setInputFocused(true)}
@@ -252,7 +295,36 @@ export default function Home() {
                                 value={nlpInput}
                                 onChange={e => setNlpInput(e.target.value)}
                                 onKeyDown={e => e.key === 'Enter' && handleAddExpense(e)}
+                                style={{ flex: 1, paddingRight: '85px' }}
                             />
+                            <div 
+                                onClick={() => setIsDateSheetOpen(true)}
+                                style={{
+                                    position: 'absolute',
+                                    right: 0,
+                                    background: '#f2f3f5',
+                                    padding: '8px 10px',
+                                    borderRadius: '15px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    transition: 'all 0.2s',
+                                }}
+                                onPointerDown={e => e.currentTarget.style.transform = 'scale(0.95)'}
+                                onPointerUp={e => e.currentTarget.style.transform = 'scale(1)'}
+                            >
+                                <ChevronDownIcon size={14} color="#202020" />
+                                <span style={{ 
+                                    fontSize: '12px', 
+                                    fontWeight: '700', 
+                                    color: '#202020', 
+                                    
+                                    letterSpacing: '0.5px' 
+                                }}>
+                                    {formatDateLabel(selectedDate)}
+                                </span>
+                            </div>
                         </div>
                         {nlpInput.trim() && (
                             <div style={{ marginTop: 4, fontSize: 12, fontWeight: 500, color: (mainPreview && mainPreview.title) ? '#c9f158' : '#202020' }}>
@@ -264,26 +336,177 @@ export default function Home() {
                             </div>
                         )}
                     </div>
-                    {(inputFocused || selectedCat) && (
-                        <div className="categories-row">
-                            {catMap.map(c => (
-                                <div
-                                    key={c.name}
-                                    className={`cat-btn ${selectedCat === c.name ? 'selected' : ''}`}
-                                    onMouseDown={e => e.preventDefault()}
-                                    onClick={() => setSelectedCat(selectedCat === c.name ? '' : c.name)}
-                                >
-                                    <span className="cat-icon">{c.icon}</span>
-                                    <span className="cat-label">{c.name}</span>
-                                </div>
-                            ))}
+                    {(inputFocused || selectedCat || isCatSheetOpen) && (
+                    <div 
+                        className="categories-row" 
+                        style={{ 
+                            display: 'flex', 
+                            overflowX: 'auto', 
+                            padding: '12px 0',
+                            paddingBottom: '8px', 
+                            gap: '8px',
+                            scrollbarWidth: 'none',
+                            msOverflowStyle: 'none' 
+                        }}
+                    >
+                        <style>{`.categories-row::-webkit-scrollbar { display: none; }`}</style>
+                        
+                        {catMap.map(c => (
+                            <div
+                                key={c.name}
+                                className={`cat-btn ${selectedCat === c.name ? 'selected' : ''}`}
+                                onMouseDown={e => e.preventDefault()}
+                                onClick={() => setSelectedCat(selectedCat === c.name ? '' : c.name)}
+                                style={catBtnStyle}
+                            >
+                                <span className="cat-icon">{c.icon}</span>
+                                <span className="cat-label">{c.name}</span>
+                            </div>
+                        ))}
+
+                        {selectedCat && !catMap.find(c => c.name === selectedCat) && (
+                            <div
+                                className="cat-btn selected"
+                                onClick={() => setSelectedCat('')}
+                                style={{...catBtnStyle,flexShrink: 0 }}
+                            >
+                                <span className="cat-icon"><Grid size={20} /></span>
+                                <span className="cat-label">{selectedCat}</span>
+                            </div>
+                        )}
+
+                        <div
+                            className="cat-btn"
+                            onClick={() => setIsCatSheetOpen(true)}
+                            onMouseDown={e => e.preventDefault()}
+                            style={{...catBtnStyle}}
+                        >
+                            <span className="cat-icon"><Plus size={20} /></span>
+                            <span className="cat-label">More</span>
                         </div>
-                    )}
+                    </div>
+                )}
 
                     <button className="log-btn" onClick={handleAddExpense} disabled={!nlpInput.trim()}>
                         blip.
                     </button>
                 </div>
+
+                <BottomSheet 
+                    isOpen={isCatSheetOpen} 
+                    onClose={() => setIsCatSheetOpen(false)} 
+                    title="Custom Category"
+                >
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingBottom: '20px' }}>
+                        <p style={{ fontSize: '14px', color: 'var(--text-3)', lineHeight: '1.5' }}>
+                            Can't find a category? Type a custom one below.
+                        </p>
+                        
+                        <div className="form-field">
+                            <input
+                                autoFocus
+                                type="text"
+                                className="form-input"
+                                placeholder="e.g. Gift, Vacation, Petty Cash"
+                                value={customCatInput}
+                                onChange={e => setCustomCatInput(e.target.value)}
+                                style={{ fontSize: '16px', fontWeight: '600' }}
+                            />
+                        </div>
+
+                        <button 
+                            className="overlay-submit" 
+                            onClick={() => {
+                                if (customCatInput.trim()) {
+                                    const finalValue = customCatInput.trim();
+                                    
+                                    if (isSheetOpen) {
+                                        setRecCat(finalValue);
+                                    } 
+                                    else {
+                                        setSelectedCat(finalValue);
+                                    }
+
+                                    setIsCatSheetOpen(false);
+                                    setCustomCatInput('');
+                                }
+                            }}
+                            disabled={!customCatInput.trim()}
+                        >
+                            Apply Category
+                        </button>
+                    </div>
+                </BottomSheet>
+                
+                <BottomSheet 
+                    isOpen={isDateSheetOpen} 
+                    onClose={() => setIsDateSheetOpen(false)} 
+                    title="Select Date"
+                >
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '10px 4px 30px 4px' }}>
+                        <input 
+                            type="date" 
+                            className="form-input"
+                            style={{ 
+                                width: '100%', fontSize: '18px', fontWeight: '600', border: '1px solid #e2e4e8',
+                                background: '#ffffff',
+                                borderRadius: '25px', padding: '16px', color: '#202020'
+                            }}
+                            value={selectedDate.toISOString().split('T')[0]}
+                            onChange={(e) => {
+                                setSelectedDate(new Date(e.target.value));
+                                setTimeout(() => setIsDateSheetOpen(false), 300);
+                            }}
+                        />
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                            {['Today', 'Yesterday'].map((label) => {
+                                const targetDate = new Date();
+                                if (label === 'Yesterday') targetDate.setDate(targetDate.getDate() - 1);
+                                
+                                const isSelected = selectedDate.toDateString() === targetDate.toDateString();
+
+                                return (
+                                    <button 
+                                        key={label}
+                                        onClick={() => {
+                                            setSelectedDate(targetDate);
+                                            setTimeout(() => setIsDateSheetOpen(false), 300);
+                                        }}
+                                        style={{ 
+                                            height: '65px', 
+                                            borderRadius: '18px',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                            background: isSelected ? '#202020' : '#ffffff',
+                                            border: isSelected ? '2px solid #ffffff' : '1.5px solid #202020', 
+                                            color: isSelected ? '#ffffff' : '#202020',
+                                            transform: isSelected ? 'scale(1.02)' : 'scale(1)',
+                                        }}
+                                    >
+                                        <span style={{ 
+                                            fontSize: '10px', 
+                                            fontWeight: '800', 
+                                            textTransform: 'uppercase', 
+                                            letterSpacing: '1px', 
+                                            opacity: isSelected ? 1 : 0.5, 
+                                            marginBottom: '4px'
+                                        }}>
+                                            {isSelected ? 'Current' : 'Set to'}
+                                        </span>
+                                        <span style={{ fontSize: '15px', fontWeight: '600'}}>
+                                            {label}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </BottomSheet>
 
                 <div className="section-title" style={{ marginTop: '20px' }}>Explore</div>
                 <div className="card-scroll-container">
@@ -602,12 +825,20 @@ export default function Home() {
                                             borderBottom: index !== recentExpenses.length - 1 ? '1px solid var(--border)' : 'none'
                                         }}
                                     >
-                                        <div className="profile-row-icon" style={{ background: '#ffffff', color: 'var(--indigo)', width: 40, height: 40, border: '1px solid var(--border)', padding: '10px' }}>
-                                            {e.category === 'Food' ? <Coffee size={20} /> :
-                                                e.category === 'Transport' ? <Car size={20} /> :
-                                                    e.category === 'Shopping' ? <ShoppingBag size={20} /> :
-                                                        e.category === 'Housing' ? <HomeIcon size={20} /> :
-                                                            <Grid size={20} />}
+                                        <div style={{ 
+                                            background: '#ffffff', 
+                                            color: 'var(--indigo)', 
+                                            width: 40, 
+                                            height: 40, 
+                                            borderRadius: '12px', // Consistency with other UI elements
+                                            border: '1px solid var(--border)', 
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            flexShrink: 0,
+                                            marginRight: '12px'
+                                        }}>
+                                            {getCategoryIcon(e.category)}
                                         </div>
 
                                         <div className="profile-row-text">
@@ -733,17 +964,66 @@ export default function Home() {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 4 }}>
                     <div className="form-field">
-                        <div className="categories-row">
+                        <div 
+                            className="categories-row" 
+                            style={{ 
+                                display: 'flex', 
+                                overflowX: 'auto', 
+                                padding: '12px 0',
+                                paddingBottom: '8px', 
+                                gap: '8px',
+                                scrollbarWidth: 'none',
+                                msOverflowStyle: 'none' 
+                            }}
+                        >
+                            <style>{`.categories-row::-webkit-scrollbar { display: none; }`}</style>
+                            
+                            {/* 1. Standard categories loop */}
                             {catMap.map(c => (
                                 <div
                                     key={c.name}
                                     className={`cat-btn ${recCat === c.name ? 'selected' : ''}`}
+                                    onMouseDown={e => e.preventDefault()}
                                     onClick={() => setRecCat(recCat === c.name ? '' : c.name)}
+                                    style={catBtnStyle}
                                 >
                                     <span className="cat-icon">{c.icon}</span>
-                                    <span className="cat-label">{c.name}</span>
+                                    <span className="cat-label" style={{ fontSize: '10px', fontWeight: '700' }}>{c.name}</span>
                                 </div>
                             ))}
+
+                            {/* 2. Custom category display (if recCat is not in catMap) */}
+                            {recCat && !catMap.find(c => c.name === recCat) && (
+                                <div
+                                    className="cat-btn selected"
+                                    onMouseDown={e => e.preventDefault()}
+                                    onClick={() => setRecCat('')}
+                                    style={{...catBtnStyle, flexShrink: 0 }}
+                                >
+                                    <span className="cat-icon"><Grid size={20} /></span>
+                                    <span className="cat-label" style={{ 
+                                        fontSize: '10px', 
+                                        fontWeight: '700',
+                                        maxWidth: '100%',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap'
+                                    }}>
+                                        {recCat}
+                                    </span>
+                                </div>
+                            )}
+
+                            {/* 3. The More button */}
+                            <div
+                                className="cat-btn"
+                                onClick={() => setIsCatSheetOpen(true)}
+                                onMouseDown={e => e.preventDefault()}
+                                style={{...catBtnStyle}}
+                            >
+                                <span className="cat-icon"><Plus size={20} /></span>
+                                <span className="cat-label" style={{ fontSize: '10px', fontWeight: '700' }}>More</span>
+                            </div>
                         </div>
                     </div>
                     <DayInput value={recDate} onChange={setRecDate} />
@@ -856,10 +1136,8 @@ export default function Home() {
 
             <BottomSheet
                 isOpen={isPromptMonthOpen}
-                /* 1. Make the backdrop/swipe do nothing */
                 onClose={() => { }}
                 title="New Month, New Budget?"
-                /* 2. If your BottomSheet component supports these, add them: */
                 dismissible={false}
                 showCloseButton={false}
             >

@@ -336,14 +336,16 @@ export const AppProvider = ({ children }) => {
 
     // ── EXPENSES ──────────────────────────────────────────────────────────────
 
-    const addExpenseNLP = async (inputStr, selectedCategory) => {
+    const addExpenseNLP = async (inputStr, selectedCategory, selectedDate) => {
         const parsed = parseExpenseInput(inputStr);
         if (!parsed) return;
         let { amount, title: description } = parsed;
         description = toTitleCase(description || 'Manual Entry');
         const bestCat = selectedCategory || autoCategory(description) || 'General';
+        const dateStr = selectedDate ? new Date(selectedDate).toISOString() : new Date().toISOString();
+
         const tempId = `temp-${Date.now()}`;
-        const tempExp = { id: tempId, amount, description, category: bestCat, date: new Date().toISOString() };
+        const tempExp = { id: tempId, amount, description, category: bestCat, date: dateStr};
 
         if (!window.navigator.onLine) {
             toast.error("Can't save while offline. Please reconnect.");
@@ -353,7 +355,7 @@ export const AppProvider = ({ children }) => {
         triggerFlow('expense', amount);
 
         try {
-            const created = await api.createExpense({ amount, description, category: bestCat });
+            const created = await api.createExpense({ amount, description, category: bestCat, date: dateStr });
             setExpenses(prev => prev.map(e => e.id === tempId ? normalizeExpense(created) : e));
         } catch (err) {
             setErrorFrom(err, 'Failed to add expense');

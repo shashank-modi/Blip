@@ -7,7 +7,7 @@ import {
     Coffee, Car, ShoppingBag, Home, Grid,
     TrendingDown, TrendingUp, Wallet,
     ChevronLeft, ChevronRight,
-    PieChart, BarChart2, Lightbulb, AlertTriangle, PiggyBank, LayoutGrid, CheckCircle, LineChart
+    PieChart, BarChart2, Lightbulb, AlertTriangle, PiggyBank, LayoutGrid, CheckCircle, LineChart, Clapperboard, BookHeart, Hospital
 } from 'lucide-react';
 
 const CATEGORY_META = {
@@ -16,6 +16,9 @@ const CATEGORY_META = {
     Shopping: { icon: <ShoppingBag size={22} />, color: '#D97706', bg: '#FFFFFF' },
     Bills: { icon: <Home size={22} />, color: '#7C3AED', bg: '#FFFFFF' },
     General: { icon: <Grid size={22} />, color: '#238cc9ff', bg: '#FFFFFF' },
+    Entertainment: { icon: <Clapperboard size={20} />, color: '#F59E0B', bg: '#FFFFFF' },
+    'Personal Care': { icon: <BookHeart size={20} />, color: '#8B5CF6', bg: '#FFFFFF' },
+    Medical: { icon: <Hospital size={20} />, color: '#EF4444', bg: '#FFFFFF' }
 };
 
 function SpendingTrendChart({ expenses }) {
