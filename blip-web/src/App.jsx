@@ -15,6 +15,7 @@ import Friends from './screens/Friends';
 import WhatsNew from './components/WhatsNew';
 import { Lock, ChartBarBig, FastForward, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { api } from './lib/api';
 
 function GoogleSignInButton() {
     const { signIn, isLoaded } = useSignIn();
@@ -698,7 +699,7 @@ function AppShell() {
                         padding: '12px 22px',
                         boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
                         letterSpacing: '0.1px',
-                        marginBottom: '80px', // ✅ Important: Floats it above the BottomNav
+                        marginBottom: '80px', //  Important: Floats it above the BottomNav
                     },
                     success: {
                         iconTheme: {
@@ -785,6 +786,12 @@ function AppShell() {
 function App() {
     const [showSplash, setShowSplash] = useState(true);
 
+    useEffect(() => {
+        api.wakeup()
+            .then(() => console.log("Blip backend wake-up signal sent..."))
+            .catch(() => {}); // Fire and forget
+    }, []);
+    
     // In your App() function, add this useEffect:
     useEffect(() => {
         const handleVisibilityChange = () => {

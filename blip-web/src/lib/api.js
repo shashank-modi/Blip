@@ -20,7 +20,9 @@ const toQueryString = (params) => {
     return serialized ? `?${serialized}` : '';
 };
 
-const request = async (path, options = {}) => {
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+const request = async (path, options = {}, retries = 6) => { // 6 retries * 5s = 30s total patience
     const headers = {
         'Content-Type': 'application/json',
         ...(options.headers || {})
@@ -28,36 +30,52 @@ const request = async (path, options = {}) => {
 
     if (tokenGetter) {
         const token = await tokenGetter();
-        if (token) {
-            headers.Authorization = `Bearer ${token}`;
+        if (token) headers.Authorization = `Bearer ${token}`;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}${path}`, {
+            ...options,
+            headers
+        });
+        if (!response.ok && [502, 503, 504].includes(response.status) && retries > 0) {
+            console.log(`Render waking up (Status ${response.status}). Retrying in 5s...`);
+            await sleep(5000);
+            return request(path, options, retries - 1);
         }
+
+        const isJson = response.headers.get('content-type')?.includes('application/json');
+        const payload = isJson ? await response.json() : null;
+
+        if (!response.ok) {
+            const error = new Error(payload?.error || `Request failed with status ${response.status}`);
+            error.status = response.status;
+            error.payload = payload;
+            throw error;
+        }
+
+        return payload;
+
+    } catch (err) {
+        if (retries > 0 && (err.message === 'Failed to fetch' || err.code === 'ECONNREFUSED')) {
+            console.log("Network error (server likely asleep). Retrying in 5s...");
+            await sleep(5000);
+            return request(path, options, retries - 1);
+        }
+        throw err;
     }
-
-    const response = await fetch(`${API_BASE_URL}${path}`, {
-        ...options,
-        headers
-    });
-
-    const isJson = response.headers.get('content-type')?.includes('application/json');
-    const payload = isJson ? await response.json() : null;
-
-    if (!response.ok) {
-        const error = new Error(payload?.error || `Request failed with status ${response.status}`);
-        error.status = response.status;
-        error.payload = payload;
-        throw error;
-    }
-
-    return payload;
 };
 
 export const api = {
+    wakeup: () => request('/health'),
+
     syncUser: (data) => request('/users/sync', { method: 'POST', body: JSON.stringify(data) }),
     getMe: () => request('/users/me'),
     updateBudget: (budget, phone) => request('/users/me/budget', {
         method: 'PATCH',
         body: JSON.stringify({ budget, phone })
     }),
+
     updatePhone: (phone) => request('/users/me/phone', { method: 'PATCH', body: JSON.stringify({ phone }) }),
     updateUserVersion: (version) => request('/users/me/version', { method: 'PATCH', body: JSON.stringify({ version }) }),
     updateOnboardingStatus: () => request('/users/me/onboarding', { method: 'PATCH' }),

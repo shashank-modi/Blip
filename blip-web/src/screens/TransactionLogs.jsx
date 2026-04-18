@@ -3,7 +3,7 @@ import { useApp } from '../store/AppContext';
 import SwipeableItem from '../components/SwipeableItem';
 import EditExpenseSheet from '../components/EditExpenseSheet';
 import { formatCurrency } from '../utils/format';
-import { Coffee, Car, ShoppingBag, Home, Grid, Plus, ChevronLeft } from 'lucide-react';
+import { Coffee, Car, ShoppingBag, Home, Grid, Plus, ChevronLeft, Clapperboard, BookHeart, Hospital} from 'lucide-react';
 
 export default function TransactionLogs() {
     const { expenses, setCurrentScreen, deleteExpense, updateExpense } = useApp();
@@ -78,7 +78,10 @@ export default function TransactionLogs() {
         Housing: <Home size={20} />,
         Bills: <Home size={20} />,
         General: <Grid size={20} />,
-        Income: <Plus size={20} />
+        Income: <Plus size={20} />,
+        Entertainment: <Clapperboard size={20} />, 
+        'Personal Care': <BookHeart size={20} />, 
+        Medical: <Hospital size={20} />
     };
 
     return (
