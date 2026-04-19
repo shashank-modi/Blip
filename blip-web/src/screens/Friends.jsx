@@ -512,6 +512,7 @@ function ExpenseSheet({ isOpen, onClose, mode, allFriends, allGroups, preFriends
 
 function SettleSheet({ isOpen, onClose, name, totalOwed, onConfirm }) {
     const [submitting, setSubmitting] = useState(false);
+    const [syncWithBudget, setSyncWithBudget] = useState(false);
     const abs = Math.abs(totalOwed);
     const [amt, setAmt] = useState(String(abs));
     const parsed = parseFloat(amt) || 0;
@@ -533,7 +534,7 @@ function SettleSheet({ isOpen, onClose, name, totalOwed, onConfirm }) {
                 </div>
 
                 {/* Big amount input */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#ffffff', borderRadius: 28, padding: '12px 16px', border: `1.5px solid ${canPay ? '#202020' : 'transparent'}`, transition: 'border-color 0.2s' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#ffffff', borderRadius: 28, padding: '12px 14px', border: `1.5px solid ${canPay ? '#202020' : '#2020206a'}`, transition: 'border-color 0.2s' }}>
                     <span style={{ fontSize: 26, fontWeight: 700, color: 'var(--text-3)' }}>₹</span>
                     <input inputMode='decimal' type="number" value={amt} onChange={e => setAmt(e.target.value)} style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 27, fontWeight: 800, fontFamily: "'Montserrat', sans-serif", color: '#202020', letterSpacing: '-1px' }} />
                 </div>
@@ -547,6 +548,30 @@ function SettleSheet({ isOpen, onClose, name, totalOwed, onConfirm }) {
                     ))}
                     <div onClick={() => setAmt(String(abs))} style={{ padding: '6px 13px', borderRadius: 99, cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: "'Montserrat', sans-serif", background: parsed === abs ? '#c9f158' : '#f2f3f5', color: parsed === abs ? '#202020' : 'var(--text-3)', transition: 'all 0.15s' }}>
                         Full ₹{fmt(abs)}
+                    </div>
+                </div>
+                    
+                <div //toggle
+                    onClick={() => setSyncWithBudget(!syncWithBudget)}
+                    style={{
+                        padding: '14px 16px', borderRadius: '30px',
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        cursor: 'pointer', marginTop: '4px'
+                    }}
+                >
+                    <div>
+                        <div style={{ fontSize: '14px', fontWeight: '700', color: '#202020', fontFamily: 'Montserrat' }}>Log this as an Expense?</div>
+                    </div>
+                    <div style={{
+                        width: '55px', height: '25px', background: syncWithBudget ? '#202020' : '#ebecef',
+                        borderRadius: '20px', position: 'relative', transition: '0.3s'
+                    }}>
+                        <div style={{
+                            width: '19px', height: '19px', background: '#fff', borderRadius: '50%',
+                            position: 'absolute', top: '3px', left: syncWithBudget ? '33px' : '3px',
+                            transition: '0.3s cubic-bezier(0.175, 0.885, 0.32, 1.2)',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                        }} />
                     </div>
                 </div>
 
@@ -567,7 +592,7 @@ function SettleSheet({ isOpen, onClose, name, totalOwed, onConfirm }) {
                 <button disabled={!canPay || submitting} onClick={async () => {
                     setSubmitting(true);
                     try {
-                        await onConfirm(parsed);
+                        await onConfirm(parsed, syncWithBudget);
                     } finally {
                         setSubmitting(false);
                     }
@@ -1543,10 +1568,10 @@ function FriendDetail({ friend, allFriends, onBack, onRemoveFriend, onRefresh })
         });
     }, [visibleExpenses, friend.name, user?.id]);
 
-    const handleSettle = async (amount) => {
+    const handleSettle = async (amount, shouldLog) => {
         setShowSettle(false);
         try {
-            await settleFriend(friend.id, amount, friend.name);
+            await settleFriend(friend.id, amount, friend.name, shouldLog);
             await syncFriendDetail(friend.id);
         } catch (e) {
             toast.error(e.message || "Settlement failed");
@@ -1906,10 +1931,10 @@ function GroupDetail({ group: initialGroup, allFriends = [], onBack, onRefresh }
                     onClose={() => setSettlingMember(null)}
                     name={settlingMember.name}
                     totalOwed={settlingMember.net}
-                    onConfirm={async (amount) => {
+                    onConfirm={async (amount, shouldLog) => {
                         setSettlingMember(null);
                         try {
-                            await settleGroup(currentGroup.id, settlingMember.id, amount);
+                            await settleGroup(currentGroup.id, settlingMember.id, amount, settlingMember.name, settlingMember.net<0,shouldLog);
                             await syncGroupDetail(currentGroup.id);
                         } catch (e) { toast.error('Settlement failed'); }
                     }}

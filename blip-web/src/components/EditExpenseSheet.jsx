@@ -1,13 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import BottomSheet from './BottomSheet';
-import { Coffee, Car, ShoppingBag, Grid, Home as HomeIcon } from 'lucide-react';
+import { Coffee, Car, ShoppingBag, Grid, Home as HomeIcon, Clapperboard, Hospital, Receipt, BookHeart } from 'lucide-react';
 
-const CATEGORIES = [
+const catMap = [
     { name: 'Food', icon: <Coffee size={20} /> },
     { name: 'Transport', icon: <Car size={20} /> },
     { name: 'Shopping', icon: <ShoppingBag size={20} /> },
-    { name: 'Housing', icon: <HomeIcon size={20} /> }
+    { name: 'Housing', icon: <HomeIcon size={20} /> },
+    { name: 'Entertainment', icon: <Clapperboard size={20} /> },
+    { name: 'Medical', icon: <Hospital size={20} /> },
+    { name: 'Bills', icon: <Receipt size={20} /> },
+    { name: 'Personal Care', icon: <BookHeart size={20} /> }
 ];
+
+const catBtnStyle = {
+        flexShrink: 0,
+        width: '92px',
+        height: '72px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '4px',
+        borderRadius: '16px',
+        transition: 'all 0.2s ease',
+    };
 
 export default function EditExpenseSheet({ isOpen, onClose, expense, onSave }) {
     const [amount, setAmount] = useState('');
@@ -48,11 +65,10 @@ export default function EditExpenseSheet({ isOpen, onClose, expense, onSave }) {
             <div style={{
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '20px', // Increased gap for better touch targets on mobile
+                gap: '20px', 
                 paddingBottom: '20px'
             }}>
 
-                {/* Responsive Row: Stacks on mobile, side-by-side on laptop */}
                 <div style={{
                     display: 'flex',
                     flexWrap: 'wrap', // THE KEY FIX
@@ -110,20 +126,30 @@ export default function EditExpenseSheet({ isOpen, onClose, expense, onSave }) {
 
                 <div className="form-field">
                     <div className="form-label">Category</div>
-                    <div className="categories-row" style={{
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        gap: '8px'
-                    }}>
-                        {CATEGORIES.map(c => (
+                    <div 
+                        className="categories-row" 
+                        style={{ 
+                            display: 'flex', 
+                            overflowX: 'auto', 
+                            padding: '12px 0',
+                            paddingBottom: '8px', 
+                            gap: '8px',
+                            scrollbarWidth: 'none',
+                            msOverflowStyle: 'none' 
+                        }}
+                    >
+                        <style>{`.categories-row::-webkit-scrollbar { display: none; }`}</style>   
+                        {catMap.map(c => (
                             <div
                                 key={c.name}
                                 className={`cat-btn ${category === c.name ? 'selected' : ''}`}
                                 onClick={() => setCategory(category === c.name ? 'General' : c.name)}
-                                style={{ flex: '1 1 calc(50% - 8px)', minWidth: '100px' }}
+                                style={catBtnStyle}
                             >
                                 <span className="cat-icon">{c.icon}</span>
-                                <span className="cat-label" style={{ fontSize: '12px' }}>{c.name}</span>
+                                <span className="cat-label" style={{ fontSize: '10px', fontWeight: '700' }}>
+                                    {c.name}
+                                </span>
                             </div>
                         ))}
                     </div>

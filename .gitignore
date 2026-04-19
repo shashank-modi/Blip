@@ -10,6 +10,8 @@ blip-api/.env
 blip-web/.env.local
 blip-web/.env.production
 
+Audit Report - Blip Health Check.md
+
 # Frontend build output
 blip-web/dist/
 blip-web/.vite/

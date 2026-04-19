@@ -775,10 +775,14 @@ export const AppProvider = ({ children }) => {
         } catch (err) { setErrorFrom(err, 'Failed to delete payment'); throw err; }
     };
 
-    const settleFriend = async (friendId, amount, name) => {
+    const settleFriend = async (friendId, amount, name, shouldLog = false) => {
+        const description = `Paid ${name}`;
         triggerFlow('income', amount);
         try {
             await api.settleFriend(friendId, amount);
+
+            if (shouldLog) await addExpenseNLP(`${amount} ${description}`, 'Social', new Date());
+
             const f = friends.find(f => f.id === friendId);
             if (f) {
                 const bal = parseFloat(f.balance || 0);
@@ -788,10 +792,14 @@ export const AppProvider = ({ children }) => {
         } catch (err) { setErrorFrom(err, 'Failed to settle with friend'); throw err; }
     };
 
-    const settleGroup = async (groupId, toUserId, amount, name, owes) => {
+    const settleGroup = async (groupId, toUserId, amount, name, owes, shouldLog=false) => {
+        const description = `Paid ${name}`;
         triggerFlow('income', amount);
         try {
             await api.settleGroup(groupId, toUserId, amount);
+
+            if (shouldLog) await addExpenseNLP(`${amount} ${description}`, 'Social', new Date());
+
             await refreshSocial();
         } catch (err) { setErrorFrom(err, 'Failed to settle in group'); throw err; }
     };

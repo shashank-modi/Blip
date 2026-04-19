@@ -214,17 +214,17 @@ export default function Home() {
     ];
 
     const catBtnStyle = {
-    flexShrink: 0,
-    width: '92px',
-    height: '72px',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '4px',
-    borderRadius: '16px',
-    transition: 'all 0.2s ease',
-};
+        flexShrink: 0,
+        width: '92px',
+        height: '72px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '4px',
+        borderRadius: '16px',
+        transition: 'all 0.2s ease',
+    };
 
     const catMap = [
     { name: 'Food', icon: <Coffee size={20} /> },
@@ -410,7 +410,7 @@ export default function Home() {
                                 placeholder="e.g. Gift, Vacation, Petty Cash"
                                 value={customCatInput}
                                 onChange={e => setCustomCatInput(e.target.value)}
-                                style={{ fontSize: '16px', fontWeight: '600' }}
+                                style={{ fontSize: '16px', fontWeight: '600', borderRadius: 30 }}
                             />
                         </div>
 
@@ -450,7 +450,7 @@ export default function Home() {
                             style={{ 
                                 width: '100%', fontSize: '18px', fontWeight: '600', border: '1px solid #e2e4e8',
                                 background: '#ffffff',
-                                borderRadius: '25px', padding: '16px', color: '#202020'
+                                borderRadius: '36px', padding: '14px', color: '#202020'
                             }}
                             value={selectedDate.toISOString().split('T')[0]}
                             onChange={(e) => {
@@ -475,7 +475,7 @@ export default function Home() {
                                         }}
                                         style={{ 
                                             height: '65px', 
-                                            borderRadius: '18px',
+                                            borderRadius: '42px',
                                             display: 'flex',
                                             flexDirection: 'column',
                                             alignItems: 'center',
@@ -1051,7 +1051,7 @@ export default function Home() {
                             placeholder="₹0"
                             value={incomeAmt}
                             onChange={e => setIncomeAmt(Math.max(0, e.target.value))}
-                            style={{ fontSize: '20px', fontFamily: 'Montserrat, sans-serif', fontWeight: '700' }}
+                            style={{ fontSize: '20px', fontFamily: 'Montserrat, sans-serif', fontWeight: '700', borderRadius: 36 }}
                         />
                     </div>
 
