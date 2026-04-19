@@ -6,6 +6,7 @@ import DayInput from '../components/DayInput';
 import EditExpenseSheet from '../components/EditExpenseSheet';
 import EditRecurringSheet from '../components/EditRecurringSheet';
 import { motion } from 'framer-motion';
+import { createPortal } from 'react-dom';
 // import GuidedTour from '../components/GuidedTour';
 
 import { Receipt, Repeat, Coffee, Car, ShoppingBag, Grid, CheckCircle2, Home as HomeIcon, HeartCrack, Briefcase, Gift, ArrowUpCircle, Plus, ArrowUpRight, LayoutDashboard, ChevronRight, Clapperboard, BookHeart, Hospital, ChevronDownIcon} from 'lucide-react';
@@ -1345,11 +1346,9 @@ export default function Home() {
                         </div>
                     </div>
                 </div>
-            </BottomSheet>
-
-            {/* PURCHASE ITEM POPUP */}
+                {/* PURCHASE ITEM POPUP */}
             {
-                purchaseItem && (
+                purchaseItem && createPortal(
                     <div style={{
                         position: 'fixed', inset: 0, zIndex: 99999,
                         background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
@@ -1396,9 +1395,11 @@ export default function Home() {
                                 </button>
                             </div>
                         </div>
-                    </div>
+                    </div>, document.body
                 )
             }
+            </BottomSheet>
+
             {/* {showTour && (
                 <GuidedTour onComplete={() => setShowTour(false)} />
             )} */}
