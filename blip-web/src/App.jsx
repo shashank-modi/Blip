@@ -12,8 +12,9 @@ import Investments from './screens/Investments';
 import TransactionLogs from './screens/TransactionLogs';
 import Profile from './screens/Profile';
 import Friends from './screens/Friends';
+import LandingPage from './screens/LandingPage';
 import WhatsNew from './components/WhatsNew';
-import { Lock, ChartBarBig, FastForward, X } from 'lucide-react';
+import { Lock, ChartBarBig, FastForward, X, ChevronLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from './lib/api';
 
@@ -315,7 +316,7 @@ function LoadingScreen() {
 }
 
 
-function SignInPage() {
+function SignInPage({ onBack }) {
     const features = [
         {
             icon: (
@@ -374,6 +375,21 @@ function SignInPage() {
                 padding: '0 28px',
                 overflow: 'hidden',
             }}>
+                {onBack && (
+                    <div style={{ position: 'absolute', top: 'max(24px, env(safe-area-inset-top, 24px))', left: 24, zIndex: 10, animation: 'siReveal 0.4s ease forwards' }}>
+                        <button 
+                            onClick={onBack} 
+                            style={{ 
+                                background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.6)', 
+                                display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, 
+                                fontWeight: 600, fontFamily: "'Montserrat', sans-serif", cursor: 'pointer', padding: '8px 0' 
+                            }}
+                        >
+                            <ChevronLeft size={18} /> Back
+                        </button>
+                    </div>
+                )}
+
                 {/* Top — brand */}
                 <div style={{
                     paddingTop: 'max(56px, 16vh)',
@@ -785,6 +801,9 @@ function AppShell() {
 // ─── Root App ─────────────────────────────────────────────────────────────────
 function App() {
     const [showSplash, setShowSplash] = useState(true);
+    const [viewLanding, setViewLanding] = useState(() => {
+        return !localStorage.getItem('blip_visited_direct');
+    });
 
     useEffect(() => {
         api.wakeup()
@@ -838,14 +857,31 @@ function App() {
     if (window.location.pathname === '/sso-callback') {
         return <AuthenticateWithRedirectCallback />;
     }
+    
+    const handleEnterApp = () => {
+        localStorage.setItem('blip_visited_direct', 'true');
+        setViewLanding(false);
+    };
+
+    const handleBackToLanding = () => {
+        localStorage.removeItem('blip_visited_direct');
+        setViewLanding(true);
+    };
 
     return (
         <>
-            {showSplash && <SplashScreen />}
             <SignedOut>
-                {!showSplash && <SignInPage />}
+                {viewLanding ? (
+                <LandingPage onGetStarted={handleEnterApp} />
+            ) : (
+                <>
+                    {showSplash && <SplashScreen />}
+                    {!showSplash && <SignInPage onBack={handleBackToLanding} />}
+                </>
+            )}
             </SignedOut>
             <SignedIn>
+                {showSplash && <SplashScreen />}
                 <AppShell />
             </SignedIn>
         </>
