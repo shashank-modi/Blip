@@ -18,7 +18,7 @@ export default function DayInput({ value, onChange }) {
     const maxDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     const numVal = parseInt(value, 10);
     const isOver = numVal > maxDay;
-    const isValid = numVal >= 1 && numVal <= maxDay;
+    const isValid = numVal >= 1 && numVal <= 31;
 
     const handleChange = (e) => {
         const raw = e.target.value.replace(/\D/g, '');
@@ -26,7 +26,7 @@ export default function DayInput({ value, onChange }) {
         onChange(String(Math.min(parseInt(raw, 10), 31)));
     };
     const handleBlur = () => {
-        if (numVal > maxDay) onChange(String(maxDay));
+        if (numVal > 31) onChange('31');
         if (numVal < 1 || isNaN(numVal)) onChange('1');
     };
 
@@ -36,12 +36,13 @@ export default function DayInput({ value, onChange }) {
             <div style={{ position: 'relative' }}>
                 <input
                     className="form-input"
+                    aria-label="Day of month"
                     inputMode="numeric"
                     placeholder="e.g. 5"
                     value={value}
                     onChange={handleChange}
                     onBlur={handleBlur}
-                    style={{ borderColor: isOver ? 'var(--danger)' : undefined, paddingRight: isValid ? 44 : 14 }}
+                    style={{ paddingRight: isValid ? 44 : 14 }}
                 />
                 {isValid && (
                     <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 11, fontWeight: 700, color: 'var(--indigo)', pointerEvents: 'none' }}>
@@ -51,10 +52,10 @@ export default function DayInput({ value, onChange }) {
             </div>
             <div style={{ marginTop: 5, fontSize: 11, fontWeight: 500 }}>
                 {isOver
-                    ? <span style={{ color: 'var(--danger)' }}>⚠ {monthName} only has {maxDay} days — will clamp to {maxDay}{getDaySuffix(maxDay)}</span>
+                    ? <span style={{ color: 'var(--danger)' }}>{monthName} has {maxDay} days. You can mark this bill paid on the day you pay it.</span>
                     : isValid
                         ? <span style={{ color: 'var(--text-3)' }}>Every {numVal}{getDaySuffix(numVal)} of the month</span>
-                        : <span style={{ color: 'var(--text-3)' }}>1 – {maxDay} for {monthName}</span>
+                        : <span style={{ color: 'var(--text-3)' }}>Choose a day from 1 to 31</span>
                 }
             </div>
         </div>

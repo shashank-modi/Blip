@@ -1,9 +1,13 @@
+import { waitUntil } from '@vercel/functions';
+import { pushAfterResponse } from './utils/pushLifecycle.js';
+import { flushPush } from './utils/push.js';
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { errorHandler } from './middleware/errorHandler.js';
 import { query } from './db/client.js';
 
+import notificationsRouter from './routes/notifications.js';
 import usersRouter from './routes/users.js';
 import expensesRouter from './routes/expenses.js';
 import recurringRouter from './routes/recurring.js';
@@ -25,7 +29,15 @@ app.use(cors({
     credentials: true,
 }));
 app.use(express.json());
+app.use(pushAfterResponse(flushPush, process.env.VERCEL ? waitUntil : undefined));
+// Timers only run reliably in the persistent local/server process.
+if (!process.env.VERCEL) {
+    const pushTimer = setInterval(() => void flushPush(), 30000);
+    pushTimer.unref();
+}
 
+app.use('/api/notifications', notificationsRouter);
+app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 app.use('/api/users', usersRouter);
 app.use('/api/expenses', expensesRouter);
 app.use('/api/recurring', recurringRouter);
@@ -48,6 +60,9 @@ app.get('/health/db', async (req, res, next) => {
 
 app.use(errorHandler);
 
+export default app;
+
+if (!process.env.VERCEL) {
 const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running at http://0.0.0.0:${PORT}/`);
 });
@@ -60,3 +75,5 @@ server.on('error', (err) => {
     }
     process.exit(1);
 });
+
+}

@@ -1,13 +1,17 @@
 {
   "name": "blip-api",
-  "version": "1.0.0",
+  "version": "3.0.0",
   "engines": {
-    "node": "20.x"
+    "node": "22.x"
   },
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node index.js"
+    "test": "node --test tests/*.test.js",
+    "start": "node index.js",
+    "migrate": "node migrate.js",
+    "migrate:neon": "node migrate.js --target=neon",
+    "setup:push": "node scripts/setup-push.js",
+    "check:db": "node scripts/check-db.js"
   },
   "keywords": [],
   "author": "",
@@ -15,12 +19,17 @@
   "description": "",
   "dependencies": {
     "@clerk/express": "^2.0.1",
+    "@neondatabase/serverless": "^1.1.0",
+    "@vercel/functions": "^3.9.9",
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
     "express": "^5.2.1",
+    "libphonenumber-js": "^1.13.14",
     "pg": "^8.20.0",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.1",
+    "web-push": "^3.6.7",
+    "ws": "^8.22.0"
   },
   "type": "module"
 }

@@ -104,8 +104,8 @@ function ProjectionSheet({ monthlySips, totalInvested, investments }) {
         <div style={{ paddingBottom: 8 }}>
             <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
                 {[
-                    { label: 'Monthly SIPs', value: `₹${formatCurrency(monthlySips)}`, sub: `${sipCount} active` },
-                    { label: 'Lump Sum', value: `₹${formatCurrency(totalInvested - monthlySips)}`, sub: `${lumpCount} entries` },
+                    { label: 'Monthly SIPs', value: `Rs. ${formatCurrency(monthlySips)}`, sub: `${sipCount} active` },
+                    { label: 'Lump Sum', value: `Rs. ${formatCurrency(totalInvested - monthlySips)}`, sub: `${lumpCount} entries` },
                 ].map(s => (
                     <div key={s.label} style={{ flex: 1, background: '#f2f3f5', borderRadius: 14, padding: '12px 14px' }}>
                         <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>{s.label}</div>
@@ -145,16 +145,16 @@ function ProjectionSheet({ monthlySips, totalInvested, investments }) {
                                     <div style={{ flex: 1 }}>
                                         <div style={{ fontSize: 17, fontWeight: 700, color: '#202020' }}>{m.label}</div>
                                         <div style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 1 }}>
-                                            Invest ₹{formatCurrency(invested)}
+                                            Invest Rs. {formatCurrency(invested)}
                                         </div>
                                     </div>
                                     <div style={{ textAlign: 'right' }}>
                                         <div style={{ fontSize: 15, fontWeight: 700, color: isLast ? '#4D7C0F' : '#202020' }}>
-                                            ₹{formatCurrency(projected)}
+                                            Rs. {formatCurrency(projected)}
                                         </div>
                                         {gain > 0 && (
                                             <div style={{ fontSize: 10, fontWeight: 500, color: '#ffffff', marginTop: 1, backgroundColor: '#c9f158', borderRadius: 99, padding: '2px 8px' }}>
-                                                +₹{formatCurrency(gain)} gains
+                                                +Rs. {formatCurrency(gain)} gains
                                             </div>
                                         )}
                                     </div>
@@ -170,7 +170,7 @@ function ProjectionSheet({ monthlySips, totalInvested, investments }) {
                         <div>
                             <div style={{ fontSize: 13, fontWeight: 700, color: '#065F46', marginBottom: 2 }}>10-year gain estimate</div>
                             <div style={{ fontSize: 12, color: '#047857', lineHeight: 1.5 }}>
-                                Your ₹{formatCurrency(monthlySips * 120)} becomes <strong>₹{formatCurrency(total10)}</strong> — that's <strong>{gainPct}% returns</strong> on principal.
+                                Your Rs. {formatCurrency(monthlySips * 120)} becomes <strong>Rs. {formatCurrency(total10)}</strong> — that's <strong>{gainPct}% returns</strong> on principal.
                             </div>
                         </div>
                     </div>
@@ -251,17 +251,17 @@ function BreakEvenSheet({ monthlySips }) {
                                             Month {m}
                                         </div>
                                         <div style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 1 }}>
-                                            Invested ₹{formatCurrency(invested)}
+                                            Invested Rs. {formatCurrency(invested)}
                                         </div>
                                     </div>
                                     <div style={{ textAlign: 'right' }}>
                                         <div style={{ fontSize: 14, fontWeight: 700, color: isTarget || isOver ? '#059669' : '#202020' }}>
-                                            ₹{formatCurrency(projected)}
+                                            Rs. {formatCurrency(projected)}
                                         </div>
                                         <div style={{ fontSize: 10, fontWeight: 500, color: projected >= invested ? '#Ffffff' : '#D97706', marginTop: 1, backgroundColor: '#c9f158', padding: '2px 6px', borderRadius: 99 }}>
                                             {projected >= invested
-                                                ? `+₹${formatCurrency(projected - invested)}`
-                                                : `-₹${formatCurrency(invested - projected)}`}
+                                                ? `+Rs. ${formatCurrency(projected - invested)}`
+                                                : `-Rs. ${formatCurrency(invested - projected)}`}
                                         </div>
                                     </div>
                                 </div>
@@ -299,7 +299,7 @@ function DailyCostSheet({ monthlySips }) {
                             Your SIP costs you
                         </div>
                         <div style={{ fontSize: 42, fontWeight: 800, color: '#c9f158', letterSpacing: '-1.5px', lineHeight: 1 }}>
-                            ₹{dailySip.toFixed(0)}
+                            Rs. {dailySip.toFixed(0)}
                         </div>
                         <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 8 }}>
                             per day
@@ -312,7 +312,7 @@ function DailyCostSheet({ monthlySips }) {
                             <Coffee size={22} />
                         </div>
                         <div style={{ fontSize: 12, color: '#047857', lineHeight: 1.6 }}>
-                            You're investing <strong>₹{dailySip.toFixed(0)}/day</strong>. That's less than{' '}
+                            You're investing <strong>Rs. {dailySip.toFixed(0)}/day</strong>. That's less than{' '}
                             <strong>{comparisons.find(c => c.cost > dailySip)?.label || 'a coffee'}</strong> — but it compounds to wealth.
                         </div>
                     </div>
@@ -372,12 +372,12 @@ function StartEarlierSheet({ monthlySips }) {
                                         <div style={{ fontSize: 15, fontWeight: 600, color: '#202020' }}>{s.label}</div>
                                         {!isBase && diff !== 0 && (
                                             <div style={{ fontSize: 13, color: diff > 0 ? '#059669' : '#EF4444', fontWeight: 600, marginTop: 1 }}>
-                                                {diff > 0 ? `+₹${formatCurrency(diff)} more` : `-₹${formatCurrency(Math.abs(diff))} less`}
+                                                {diff > 0 ? `+Rs. ${formatCurrency(diff)} more` : `-Rs. ${formatCurrency(Math.abs(diff))} less`}
                                             </div>
                                         )}
                                     </div>
                                     <div style={{ fontSize: 15, fontWeight: 700, color: isBase ? '#4D7C0F' : s.color }}>
-                                        ₹{formatCurrency(projected)}
+                                        Rs. {formatCurrency(projected)}
                                     </div>
                                 </div>
                             );
@@ -393,7 +393,7 @@ function StartEarlierSheet({ monthlySips }) {
                                     <Calendar size={22} />
                                 </div>
                                 <div style={{ fontSize: 12, color: '#991B1B', lineHeight: 1.6 }}>
-                                    Waiting just <strong>2 more years</strong> will cost you <strong>₹{formatCurrency(lostAmt)}</strong> in lost compounding — that's {Math.round(lostAmt / (monthlySips * 24))}× your skipped SIP contributions.
+                                    Waiting just <strong>2 more years</strong> will cost you <strong>Rs. {formatCurrency(lostAmt)}</strong> in lost compounding — that's {Math.round(lostAmt / (monthlySips * 24))}× your skipped SIP contributions.
                                 </div>
                             </div>
                         ) : null;
@@ -486,12 +486,12 @@ export default function Investments() {
                             Total Invested
                         </div>
                         <div style={{ fontSize: 36, fontWeight: 600, color: '#202020', letterSpacing: '-1px', lineHeight: 1, marginBottom: 14 }}>
-                            ₹{formatCurrency(totalInvested)}
+                            Rs. {formatCurrency(totalInvested)}
                         </div>
                         <div style={{ display: 'flex', gap: 8 }}>
                             {[
-                                { label: 'Monthly SIPs', value: `₹${formatCurrency(monthlySips)}`, active: monthlySips > 0 },
-                                { label: 'Lump Sum', value: `₹${formatCurrency(totalInvested - monthlySips)}`, active: false },
+                                { label: 'Monthly SIPs', value: `Rs. ${formatCurrency(monthlySips)}`, active: monthlySips > 0 },
+                                { label: 'Lump Sum', value: `Rs. ${formatCurrency(totalInvested - monthlySips)}`, active: false },
                             ].map(s => (
                                 <div key={s.label} style={{
                                     flex: 1,
@@ -574,7 +574,7 @@ export default function Investments() {
                             <div key={monthStr}>
                                 <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-2)', marginBottom: 12, display: 'flex', justifyContent: 'space-between' }}>
                                     <span>{monthStr}</span>
-                                    <span>₹{formatCurrency(group.totalInvested)} invested</span>
+                                    <span>Rs. {formatCurrency(group.totalInvested)} invested</span>
                                 </div>
                                 {group.items.map((inv, idx) => (
                                     <SwipeableItem key={inv.id} onSwipeLeft={() => handleSwipeLeft(inv.id)} onSwipeRight={() => handleSwipeRight(inv)}>
@@ -584,7 +584,7 @@ export default function Investments() {
                                                 <div className="invest-item-name">{inv.title}</div>
                                                 <div className="invest-item-freq">{inv.type === 'Monthly' ? 'Monthly SIP' : inv.type}</div>
                                             </div>
-                                            <div className="invest-item-amount">₹{formatCurrency(inv.amount)}</div>
+                                            <div className="invest-item-amount">Rs. {formatCurrency(inv.amount)}</div>
                                         </div>
                                     </SwipeableItem>
                                 ))}
@@ -620,7 +620,7 @@ export default function Investments() {
                                         <div className="invest-item-freq">Monthly SIP</div>
                                     </div>
                                     <div className="invest-item-amount" style={{ marginRight: 12 }}>
-                                        ₹{formatCurrency(inv.amount)}
+                                        Rs. {formatCurrency(inv.amount)}
                                     </div>
                                     <div
                                         onClick={e => { e.stopPropagation(); handleSwipeLeft(inv.id); }}
@@ -647,7 +647,7 @@ export default function Investments() {
                     <AnalyticsBtn
                         icon={<TrendingUp size={22} />}
                         label="Wealth Projection"
-                        sub={monthlySips > 0 ? `₹${formatCurrency(fv(monthlySips, 120))} in 10 yrs @ 12%` : 'Add a SIP to see projections'}
+                        sub={monthlySips > 0 ? `Rs. ${formatCurrency(fv(monthlySips, 120))} in 10 yrs @ 12%` : 'Add a SIP to see projections'}
                         onClick={() => setOpenSheet('projection')}
                     />
                     <AnalyticsBtn
@@ -659,7 +659,7 @@ export default function Investments() {
                     <AnalyticsBtn
                         icon={<Coffee size={22} />}
                         label="Daily Cost Framing"
-                        sub={monthlySips > 0 ? `You invest just ₹${dailySip}/day` : 'Add a SIP to see this'}
+                        sub={monthlySips > 0 ? `You invest just Rs. ${dailySip}/day` : 'Add a SIP to see this'}
                         onClick={() => setOpenSheet('dailycost')}
                     />
                     <AnalyticsBtn
@@ -692,7 +692,7 @@ export default function Investments() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                     <div style={{ display: 'flex', gap: 12 }}>
                         <div className="form-field" style={{ flex: 1 }}>
-                            <div className="form-label">Amount (₹)</div>
+                            <div className="form-label">Amount (Rs. )</div>
                             <input className="form-input" type="number" placeholder="5000"
                                 value={invAmt} onChange={e => setInvAmt(e.target.value)}
                                 style={{ fontSize: 18, fontWeight: 700 }} />
@@ -728,7 +728,7 @@ export default function Investments() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                     <div style={{ display: 'flex', gap: 12 }}>
                         <div className="form-field" style={{ flex: 1 }}>
-                            <div className="form-label">Amount (₹)</div>
+                            <div className="form-label">Amount (Rs. )</div>
                             <input className="form-input" type="number" placeholder="5000"
                                 value={editAmt} onChange={e => setEditAmt(e.target.value)}
                                 style={{ fontSize: 18, fontWeight: 700 }} />

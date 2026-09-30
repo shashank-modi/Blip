@@ -1,26 +1,14 @@
 import pg from 'pg';
 import dotenv from 'dotenv';
+import { databaseConfig, databaseErrorSummary } from './config.js';
 dotenv.config();
 
 const { Pool } = pg;
 
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) {
-    throw new Error('DATABASE_URL is required');
-}
-
-export const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: {
-        rejectUnauthorized: false,
-    },
-    max: 10,
-    idleTimeoutMillis: 60000,
-    connectionTimeoutMillis: 10000,
-});
+export const pool = new Pool(databaseConfig(process.env.DATABASE_URL));
 
 pool.on('error', (err) => {
-    console.error('Unexpected PostgreSQL pool error:', err);
+    console.error('Unexpected PostgreSQL pool error:', databaseErrorSummary(err));
 });
 
 export const query = (text, params) => pool.query(text, params);

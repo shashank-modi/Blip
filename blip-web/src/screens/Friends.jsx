@@ -1,3 +1,13 @@
+import { groupExpenseHistory, hasAppliedPayments } from '../utils/expenseOrder';
+import SettleSheet from '../components/SettleSheet';
+import DateField from '../components/DateField';
+import PageHeader from '../components/PageHeader';
+import { Equal, Scale, Hash, ArrowRight, ChartNoAxesCombined } from 'lucide-react';
+import PhoneInput from '../components/PhoneInput';
+import { phoneNumber } from '../utils/phone';
+import { splitAmount, localDate } from '../utils/splits';
+import GroupTotals from '../components/GroupTotals';
+import '../social.css';
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '../store/AppContext';
@@ -7,7 +17,7 @@ import SwipeableItem from '../components/SwipeableItem';
 import {
     UserPlus, Plus, ChevronRight, Search, Check,
     ArrowUpRight, ArrowDownLeft, ChevronLeft,
-    Wallet, X, Settings, UserMinus,
+    WalletMinimal as Wallet, Receipt, X, Settings, UserMinus,
     SlidersHorizontal, CheckCircle2, Calendar, Lightbulb,
     TrendingDown, TrendingUp, Loader2, Users, AlertCircle, Trash2
 } from 'lucide-react';
@@ -38,8 +48,8 @@ function Avatar({ initials, size = 40, dark = false }) {
 
 function BalanceTag({ amount }) {
     const bal = parseFloat(amount || 0);
-    const isSettled = Math.abs(bal) <= 0.01;
-    const isOwed = bal > 0.01;
+    const isSettled = Math.abs(bal) < 0.01;
+    const isOwed = bal >= 0.01;
 
     if (isSettled) return (
         <div style={{
@@ -70,18 +80,18 @@ function BalanceTag({ amount }) {
             border: `1px solid ${isOwed ? '#c8f1589b' : '#EF44441a'}`,
             transition: 'all 0.2s ease'
         }}>
-            <div style={{ color: isOwed ? '#c9f158' : '#EF4444', display: 'flex' }}>
+            <div style={{ color: isOwed ? '#527418' : '#EF4444', display: 'flex' }}>
                 {isOwed ? <ArrowDownLeft size={13} strokeWidth={2.5} /> : <ArrowUpRight size={13} strokeWidth={2.5} />}
             </div>
 
             <span style={{
                 fontSize: 13,
                 fontWeight: 800,
-                color: isOwed ? '#c9f158' : '#EF4444',
+                color: isOwed ? '#527418' : '#EF4444',
                 fontFamily: "'Montserrat', sans-serif",
                 letterSpacing: '-0.3px'
             }}>
-                ₹{fmt(Math.abs(bal))}
+                Rs. {fmt(Math.abs(bal))}
             </span>
         </div>
     );
@@ -161,172 +171,99 @@ function ProTip({ text }) {
     );
 }
 
-function parseInput(input) {
-    const parts = input.trim().split(/\s+/);
-    if (!parts.length) return null;
-    const first = parseFloat(parts[0]);
-    if (!isNaN(first) && first > 0) return { amount: first, desc: parts.slice(1).join(' ') };
-    const last = parseFloat(parts[parts.length - 1]);
-    if (!isNaN(last) && last > 0) return { amount: last, desc: parts.slice(0, -1).join(' ') };
-    return null;
-}
-
-function FriendSearchInput({ friends, selected, onAdd, onRemove, placeholder = 'Search friends?' }) {
+function FriendSearchInput({ friends, selected, onAdd, onRemove, placeholder = 'Choose friends to split with' }) {
     const [query, setQuery] = useState('');
-    const [focused, setFocused] = useState(false);
-    const suggestions = query.length > 0
-        ? friends.filter(f => f.name.toLowerCase().includes(query.toLowerCase()) && !selected.find(s => s.id === f.id))
-        : [];
-
-    return (
-        <div style={{ position: 'relative' }}>
-            {selected.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-                    {selected.map(f => (
-                        <motion.div key={f.id} layout initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                            style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#202020', color: '#fff', borderRadius: 99, padding: '8px 12px 8px 10px', fontSize: 14, fontWeight: 700, fontFamily: "'Montserrat', sans-serif" }}>
-                            <Avatar initials={f.initials} size={20} dark />
-                            {f.name.split(' ')[0]}
-                            <X size={11} color="rgba(255, 255, 255, 0.69)" style={{ cursor: 'pointer', marginLeft: 2 }} onClick={() => onRemove(f.id)} />
-                        </motion.div>
-                    ))}
-                </div>
-            )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#ffffff', borderRadius: 25, padding: '17px 14px', border: `1.5px solid ${focused ? '#202020' : '#6b6b6b57'}`, transition: 'border-color 0.2s' }}>
-                <Search size={20} color="var(--text-3)" />
-                <input value={query} onChange={e => setQuery(e.target.value)} onFocus={() => setFocused(true)} onBlur={() => setTimeout(() => setFocused(false), 150)} placeholder={placeholder}
-                    style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 14, fontWeight: 600, fontFamily: "'Montserrat', sans-serif", color: '#202020', boxShadow: '0 10px 30px rgba(0,0,0,0.04)' }} />
-                {query && <X size={20} color="var(--text-3)" style={{ cursor: 'pointer' }} onClick={() => setQuery('')} />}
-            </div>
-            <AnimatePresence>
-                {suggestions.length > 0 && (
-                    <motion.div {...fadeUp} style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: '#ffffff', border: '1px solid var(--border)', borderRadius: 25, overflow: 'hidden', marginTop: 4, boxShadow: '0 8px 24px rgba(0,0,0,0.1)' }}>
-                        {suggestions.map((f, idx) => (
-                            <div key={f.id} onMouseDown={() => { onAdd(f); setQuery(''); }}
-                                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '15px 14px', borderBottom: idx < suggestions.length - 1 ? '1px solid var(--border)' : 'none', cursor: 'pointer' }}>
-                                <Avatar initials={f.initials} size={35} />
-                                <span style={{ fontSize: 15, fontWeight: 600, color: '#202020' }}>{f.name}</span>
-                            </div>
-                        ))}
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </div>
-    );
+    const suggestions = friends.filter(f => f.name.toLowerCase().includes(query.toLowerCase()) && !selected.some(person => person.id === f.id));
+    return <div className="participant-picker">
+        {selected.length > 0 && <div className="participant-chips">{selected.map(friend => <button type="button" key={friend.id} onClick={() => onRemove(friend.id)} aria-label={`Remove ${friend.name}`}><Avatar initials={friend.initials} size={22} dark/>{friend.name}<X size={13}/></button>)}</div>}
+        <div className="search-field"><Search size={18}/><input aria-label="Search friends to split with" value={query} onChange={e => setQuery(e.target.value)} placeholder={placeholder}/>{query && <button type="button" className="clear-search" aria-label="Clear friend search" onClick={() => setQuery('')}><X size={16}/></button>}</div>
+        <div className="participant-options">{suggestions.map(friend => <button type="button" key={friend.id} onClick={() => { onAdd(friend); setQuery(''); }}><Avatar initials={friend.initials} size={29}/><span>{friend.name}</span><Plus size={16}/></button>)}</div>
+        {query && !suggestions.length && <p className="field-help">No more matching friends. Add someone from the Friends page first.</p>}
+        {!friends.length && <p className="field-help">Add your first friend from the Friends page to start splitting bills.</p>}
+    </div>;
 }
 
-function useExpenseForm(initialExpense, initialPeople, mode) {
-    const [nlp, setNlp] = useState(initialExpense ? `${initialExpense.desc} ${initialExpense.amount}` : '');
-    const [date, setDate] = useState(initialExpense?.date || new Date().toISOString().split('T')[0]);
-    const [splitType, setSplitType] = useState('equal');
+function useExpenseForm(initialExpense, initialPeople, userId) {
+    const [description, setDescription] = useState(initialExpense?.desc || '');
+    const [amount, setAmount] = useState(initialExpense ? String(initialExpense.amount) : '');
+    const [date, setDate] = useState(localDate(initialExpense?.date));
+    const [splitType, setSplitType] = useState(initialExpense ? 'unequal' : 'equal');
     const [shares, setShares] = useState({});
-    const [unequal, setUnequal] = useState({});
-    const [paidBy, setPaidBy] = useState(initialExpense?.paidBy || 'me');
+    const [unequal, setUnequal] = useState(Object.fromEntries((initialExpense?.splits || []).map(s => [s.userId, s.amount])));
+    const [paidBy, setPaidBy] = useState(initialExpense?.paidBy || userId);
     const [selectedPpl, setSelectedPpl] = useState(initialPeople || []);
-
-    const parsed = parseInput(nlp);
-    const total = parsed?.amount || 0;
-    const desc = parsed?.desc || '';
-
-    const reset = () => { setNlp(''); setDate(new Date().toISOString().split('T')[0]); setSplitType('equal'); setShares({}); setUnequal({}); setPaidBy('me'); setSelectedPpl([]); };
-
-    return { nlp, setNlp, date, setDate, splitType, setSplitType, shares, setShares, unequal, setUnequal, paidBy, setPaidBy, selectedPpl, setSelectedPpl, parsed, total, desc, reset };
+    const total = Number(amount) || 0;
+    const desc = description.trim();
+    const reset = () => { setDescription(initialExpense?.desc || ''); setAmount(initialExpense ? String(initialExpense.amount) : ''); setDate(localDate(initialExpense?.date)); setSplitType(initialExpense ? 'unequal' : 'equal'); setShares({}); setUnequal(Object.fromEntries((initialExpense?.splits || []).map(s => [s.userId, s.amount]))); setPaidBy(initialExpense?.paidBy || userId); setSelectedPpl(initialPeople || []); };
+    return { description, setDescription, amount, setAmount, date, setDate, splitType, setSplitType, shares, setShares, unequal, setUnequal, paidBy, setPaidBy, selectedPpl, setSelectedPpl, total, desc, reset };
 }
 
 function ExpenseSheet({ isOpen, onClose, mode, allFriends, allGroups, preFriends = [], preGroup = null, editingExpense = null, groupMembers = null, onSaved }) {
-    const { editSocialExpense, addGroupExpense, addFriendExpense } = useApp();
+    const { user, editSocialExpense, addGroupExpense, addFriendExpense } = useApp();
     const [submitting, setSubmitting] = useState(false);
+    const [saveError,setSaveError] = useState('');
+    const locked = hasAppliedPayments(editingExpense);
     const isEditing = !!editingExpense;
 
-    const form = useExpenseForm(editingExpense, preFriends, mode);
+    const initialPeople = editingExpense?.splits
+        ? editingExpense.splits.filter(s => s.userId !== user.id).map(s => ({ id: s.userId, name: s.name || 'Friend', initials: (s.name || 'F').slice(0, 2).toUpperCase() }))
+        : preFriends;
+    const form = useExpenseForm(editingExpense, initialPeople, user.id);
     const [selectedGrp, setSelectedGrp] = useState(preGroup || '');
+    useEffect(() => { if (isOpen) { setSaveError(''); form.reset(); setSelectedGrp(preGroup || ''); } }, [isOpen, editingExpense?.id, preGroup]);
 
     const grpMembers = allGroups?.find(g => g.id === selectedGrp)?.members || groupMembers || [];
     const people = mode === 'group'
-        ? (grpMembers.length > 0 ? grpMembers : [{ id: 'me', name: 'You', initials: 'YO' }])
-        : [{ id: 'me', name: 'You', initials: 'YO' }, ...form.selectedPpl];
+        ? (grpMembers.length > 0 ? grpMembers : [{ id: user.id, name: 'You', initials: 'YO' }])
+        : [{ id: user.id, name: 'You', initials: 'YO' }, ...form.selectedPpl];
 
     const unequalUsed = people.reduce((sum, person) => {
         return sum + parseFloat(form.unequal[person.id] || 0);
     }, 0);
 
     const unequalDiff = parseFloat((form.total - unequalUsed).toFixed(2));
-    const isUnequalSplitValid = Math.abs(unequalDiff) < 0.01;
+    const isUnequalSplitValid = Math.abs(unequalDiff) < 0.01 && people.every(person => {
+        const amount = Number(form.unequal[person.id] || 0);
+        return Number.isFinite(amount) && amount >= 0 && Math.abs(amount * 100 - Math.round(amount * 100)) < 0.000001;
+    });
 
-    const canSubmit = form.total > 0 &&
-        form.desc &&
-        (form.splitType === 'unequal' ? isUnequalSplitValid : true) &&
+    const validShares = people.every(person => Number.isFinite(Number(form.shares[person.id] ?? 1)) && Number(form.shares[person.id] ?? 1) > 0);
+    const canSubmit = !locked && Number.isFinite(form.total) && form.total > 0 && Math.abs(form.total * 100 - Math.round(form.total * 100)) < 0.000001 &&
+        form.desc && form.date && Number.isFinite(Date.parse(form.date)) &&
+        (form.splitType === 'unequal' ? isUnequalSplitValid : splitAmount(form.total, people, form.splitType === 'shares' ? form.shares : {}).length === people.length) &&
         (mode === 'friend' ? form.selectedPpl.length > 0 : !!selectedGrp);
 
     const handleClose = () => { form.reset(); onClose(); };
 
     const handleSubmit = async () => {
-        if (!canSubmit) return;
-        setSubmitting(true);
+        if (!canSubmit || submitting) return;
+        setSubmitting(true); setSaveError('');
         try {
-            let splits = [];
-            if (form.splitType === 'equal') {
-                const sq = form.total / people.length;
-                splits = people.map(p => ({ userId: p.id, amount: sq }));
-            } else if (form.splitType === 'shares') {
-                const totalShares = people.reduce((s, p) => s + parseInt(form.shares[p.id] || 1), 0);
-                splits = people.map(p => ({ userId: p.id, amount: (parseInt(form.shares[p.id] || 1) / totalShares) * form.total }));
-            } else {
-                splits = people.map(p => ({ userId: p.id, amount: parseFloat(form.unequal[p.id] || 0) }));
-            }
+            const splits = form.splitType === 'unequal'
+                ? people.map(p => ({ userId: p.id, amount: Number(form.unequal[p.id] || 0) }))
+                : splitAmount(form.total, people, form.splitType === 'shares' ? form.shares : {});
 
-            let sum = 0;
-            splits = splits.map(s => {
-                const a = parseFloat(s.amount.toFixed(2));
-                sum += a;
-                return { ...s, amount: a };
-            });
-            const diff = form.total - sum;
-            if (Math.abs(diff) > 0.001 && splits.length > 0) {
-                const payerIdx = splits.findIndex(s => s.userId === form.paidBy);
-                if (payerIdx >= 0) {
-                    splits[payerIdx].amount = parseFloat((splits[payerIdx].amount + diff).toFixed(2));
-                } else {
-                    splits[0].amount = parseFloat((splits[0].amount + diff).toFixed(2));
-                }
-            }
-
-            const payload = { description: form.desc, amount: form.total, paidBy: form.paidBy, date: form.date, splits: splits.map(s => ({ userId: s.userId, amount: s.amount })) };
+            const payload = { description: form.desc, amount: form.total, paidBy: form.paidBy, date: new Date(`${form.date}T12:00:00`).toISOString(), splits: splits.map(s => ({ userId: s.userId, amount: s.amount })) };
 
             if (isEditing) { await editSocialExpense(editingExpense.id, payload); }
             else if (mode === 'group') { await addGroupExpense(selectedGrp, payload); }
             else { const friendId = form.selectedPpl[0]?.id || preFriends[0]?.id; await addFriendExpense(friendId, payload); }
 
             form.reset();
-            if (onSaved) onSaved();
+            if (onSaved) await onSaved();
             onClose();
-        } catch (err) { toast.error(err.message || 'Failed to save'); }
+        } catch (err) { setSaveError(err.message || 'Could not save this bill. Try again.'); }
         finally { setSubmitting(false); }
     };
 
+    if (isOpen && locked) return <BottomSheet isOpen={isOpen} onClose={onClose} title="This bill has payments">
+        <div className="locked-bill"><Receipt size={28}/><h3>{editingExpense.desc}</h3><p>A payment has already been applied to this bill. Undo the related payment records in this friend or group before changing or deleting it.</p><p>Then correct the split and record the money already paid again. Undoing a record does not move any money.</p><button className="button-primary" onClick={onClose}>Back to bills</button></div>
+    </BottomSheet>;
     return (
         <BottomSheet isOpen={isOpen} onClose={handleClose} title={isEditing ? 'Edit Expense' : 'Add Expense'}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20, paddingBottom: 12 }}>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', padding: '0 4px' }}>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '1.2px' }}>
-                        {mode === 'group' ? 'Select Group' : 'Split With'}
-                    </div>
-                    <div style={{
-                        marginBottom: 8, position: 'relative', display: 'flex', alignItems: 'center', gap: 6, background: '#ffffff', padding: '10px 12px', borderRadius: 18, border: '1px solid #c4c5c8ff'
-                    }}>
-                        < Calendar size={12} color="#202020" />
-                        <input
-                            type="date"
-                            value={form.date}
-                            onChange={e => form.setDate(e.target.value)}
-                            style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
-                        />
-                        <span style={{ fontSize: 11, fontWeight: 700, color: '#202020' }}>
-                            {new Date(form.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
-                        </span>
-                    </div>
-                </div>
+                <div className="expense-form-meta"><div><span className="eyebrow">{mode === 'group' ? 'YOUR GROUP' : 'WHO’S SHARING?'}</span><p className="field-help" style={{margin:'5px 0'}}>One bill. Everyone’s share.</p></div><DateField value={form.date} onChange={form.setDate}/></div>
 
                 {mode === 'group' && !isEditing ? (
                     <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'none' }}>
@@ -340,32 +277,13 @@ function ExpenseSheet({ isOpen, onClose, mode, allFriends, allGroups, preFriends
                     <FriendSearchInput friends={allFriends} selected={form.selectedPpl} onAdd={f => form.setSelectedPpl(p => [...p, f])} onRemove={id => form.setSelectedPpl(p => p.filter(f => f.id !== id))} />
                 )}
 
-                <div style={{ marginTop: 10, fontSize: 12, fontWeight: 800, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '1.2px' }}>
-                    Expense Name and Amount
+                <div className="expense-entry">
+                    <label className="field-label" htmlFor="shared-description">What was it for?</label>
+                    <input id="shared-description" className="expense-name" autoFocus maxLength={200} value={form.description} onChange={e => form.setDescription(e.target.value)} placeholder="Dinner, hotel, groceries…" />
+                    <label className="field-label" htmlFor="shared-amount">Amount</label>
+                    <div className="expense-amount"><span>Rs. </span><input id="shared-amount" type="number" min="0.01" step="0.01" inputMode="decimal" value={form.amount} onChange={e => form.setAmount(e.target.value)} placeholder="0.00" /></div>
+                    <div className="entry-caption">{people.length} {people.length === 1 ? 'person' : 'people'} · {form.splitType === 'equal' ? 'Split equally, down to the last paisa' : 'Choose each person’s share below'}</div>
                 </div>
-                <div style={{
-                    background: '#ffffff',
-                    borderRadius: 24,
-                    padding: '0 20px',
-                    height: 55,
-                    display: 'flex',
-                    alignItems: 'center',
-                    border: `1.5px solid ${form.nlp && form.parsed ? '#c9f158' : '#c4c5c893'}`,
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.02)'
-                }}>
-                    <input
-                        autoFocus
-                        value={form.nlp}
-                        onChange={e => form.setNlp(e.target.value)}
-                        placeholder="Dinner 1200"
-                        style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: '18px', fontWeight: 800, color: '#202020', fontFamily: "'Montserrat', sans-serif" }}
-                    />
-                </div>
-                {form.nlp && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 3, margin: '-6px 8px 10px', color: form.parsed ? '#059669' : '#EF4444', fontSize: 12, fontWeight: 600 }}>
-                        {form.parsed ? <><Check size={14} /> ₹{form.parsed.amount.toLocaleString('en-IN')} for {form.parsed.desc || '...'}</> : 'Enter amount and name'}
-                    </div>
-                )}
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '1.2px', marginLeft: 4 }}>
@@ -375,7 +293,7 @@ function ExpenseSheet({ isOpen, onClose, mode, allFriends, allGroups, preFriends
                         {people.map(p => {
                             const isSelected = form.paidBy === p.id;
                             return (
-                                <motion.div
+                                <motion.button type="button" aria-pressed={isSelected} aria-label={`Paid by ${p.name}`}
                                     key={p.id}
                                     whileTap={{ scale: 0.95 }}
                                     onClick={() => form.setPaidBy(p.id)}
@@ -399,99 +317,27 @@ function ExpenseSheet({ isOpen, onClose, mode, allFriends, allGroups, preFriends
                                         {p.id === 'me' ? 'You' : p.name.split(' ')[0]}
                                     </span>
                                     {isSelected && <Check size={14} color="#c9f158" strokeWidth={3} />}
-                                </motion.div>
+                                </motion.button>
                             );
                         })}
                     </div>
                 </div>
 
-                {people.length >= 2 && form.total > 0 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                        <div style={{ display: 'flex', borderBottom: '1px solid #f0f0f0', position: 'relative' }}>
-                            {['equal', 'shares', 'unequal'].map((type) => (
-                                <button
-                                    key={type}
-                                    onClick={() => form.setSplitType(type)}
-                                    style={{
-                                        flex: 1, padding: '14px 0', border: 'none', background: 'transparent',
-                                        fontSize: 12, fontWeight: 800, cursor: 'pointer',
-                                        color: form.splitType === type ? '#202020' : 'rgba(32,32,32,0.3)',
-                                        textTransform: 'uppercase', transition: 'color 0.2s'
-                                    }}
-                                >
-                                    {type}
-                                    {form.splitType === type && (
-                                        <motion.div
-                                            layoutId="splitTab"
-                                            style={{ position: 'absolute', bottom: -1, left: 0, right: 0, height: 3.5, background: '#202020', width: '33.33%', marginLeft: type === 'equal' ? '0%' : type === 'shares' ? '33.33%' : '66.66%' }}
-                                        />
-                                    )}
-                                </button>
-                            ))}
-                        </div>
-                        <div style={{ background: '#f8f9fa', borderRadius: 25, padding: '14px 16px' }}>
-                            {people.map(p => (
-                                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0' }}>
-                                    <Avatar initials={p.initials} size={42} />
-                                    <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: '#202020' }}>{p.name}</span>
-                                    {form.splitType === 'shares' ? (
-                                        <input
-                                            type="number"
-                                            inputMode="numeric"
-                                            value={form.shares[p.id] === undefined ? 1 : form.shares[p.id]}
-                                            onChange={e => {
-                                                const rawValue = e.target.value.replace(/\D/g, '');
-                                                const val = rawValue === '' ? '' : parseInt(rawValue);
-
-                                                form.setShares({ ...form.shares, [p.id]: val });
-                                            }}
-                                            onBlur={() => {
-                                                if (form.shares[p.id] === '' || form.shares[p.id] === 0) {
-                                                    form.setShares({ ...form.shares, [p.id]: 1 });
-                                                }
-                                            }}
-                                            style={{
-                                                width: 50,
-                                                textAlign: 'center',
-                                                padding: '8px',
-                                                borderRadius: 10,
-                                                border: '1px solid #e5e7eb',
-                                                fontSize: 14,
-                                                fontWeight: 800,
-                                                outline: 'none',
-                                                background: form.shares[p.id] === 0 || form.shares[p.id] === '' ? '#fff5f5' : 'transparent'
-                                            }}
-                                        />
-                                    ) : form.splitType === 'unequal' ? (
-                                        <div style={{ position: 'relative' }}>
-                                            <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 14, fontWeight: 700 }}>₹</span>
-                                            <input
-                                                type="number"
-                                                value={form.unequal[p.id] || ''}
-                                                onChange={e => form.setUnequal({ ...form.unequal, [p.id]: e.target.value })}
-                                                placeholder="0"
-                                                style={{ width: 80, textAlign: 'right', padding: '8px 10px 8px 20px', borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 14, fontWeight: 800 }}
-                                            />
-                                        </div>
-                                    ) : (
-                                        <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-2)' }}>₹{(form.total / people.length).toFixed(1)}</span>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-                <AnimatePresence>
-                    {form.splitType === 'unequal' && !isUnequalSplitValid && (
-                        <motion.div {...fadeUp} style={{ background: '#fff5f5', borderRadius: 24, padding: '14px 16px', display: 'flex', gap: 8, alignItems: 'center' }}>
-                            <AlertCircle size={18} color="#ef4444" />
-                            <span style={{ fontSize: 12, color: '#ef4444', fontWeight: 700 }}>
-                                Mismatch : ₹{Math.abs(unequalDiff).toFixed(2)} remaining
-                            </span>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
+                {people.length >= 2 && <section className="split-editor" aria-label="Split the bill">
+                    <div className="split-tabs">{[{id:'equal',label:'Equally',Icon:Equal},{id:'unequal',label:'Exact amounts',Icon:Scale},{id:'shares',label:'By shares',Icon:Hash}].map(({id,label,Icon}) => <button key={id} type="button" aria-pressed={form.splitType === id} onClick={() => {
+                        if (id === 'unequal' && !Object.keys(form.unequal).length) form.setUnequal(Object.fromEntries(splitAmount(form.total,people).map(s=>[s.userId,s.amount])));
+                        form.setSplitType(id);
+                    }}><Icon size={19}/>{label}</button>)}</div>
+                    <p className="split-description">{form.splitType === 'equal' ? 'Everyone pays the same share. We handle any rounding.' : form.splitType === 'unequal' ? 'Enter what each person owes. The amounts must add up to the bill.' : 'Use shares as weights. Two shares pays twice as much as one.'}</p>
+                    {people.map(p => {
+                        const share = splitAmount(form.total, people, form.splitType === 'shares' ? form.shares : {}).find(s=>s.userId===p.id)?.amount || 0;
+                        return <div className="split-row" key={p.id}><Avatar initials={p.initials} size={34}/><div className="split-person-name">{p.id === user.id ? 'You' : p.name}<small>{form.splitType === 'shares' ? `Rs. ${share.toFixed(2)}` : p.id === form.paidBy ? 'Paid the bill' : 'Share of the bill'}</small></div>
+                            {form.splitType === 'equal' ? <strong>Rs. {share.toFixed(2)}</strong> : <div className="split-number"><span>{form.splitType === 'unequal' ? 'Rs. ' : '×'}</span><input type="number" inputMode={form.splitType === 'shares' ? 'numeric' : 'decimal'} min={form.splitType === 'shares' ? 1 : 0} step={form.splitType === 'shares' ? 1 : .01} aria-label={`${p.id === user.id ? 'Your' : p.name + "’s"} ${form.splitType === 'shares' ? 'shares' : 'amount'}`} value={form.splitType === 'shares' ? (form.shares[p.id] ?? 1) : (form.unequal[p.id] ?? '')} placeholder="0.00" onChange={e => form.splitType === 'shares' ? form.setShares({...form.shares,[p.id]:e.target.value}) : form.setUnequal({...form.unequal,[p.id]:e.target.value})}/></div>}
+                        </div>;
+                    })}
+                    <div className={`split-summary${(form.splitType === 'unequal' && !isUnequalSplitValid) || (form.splitType === 'shares' && !validShares) ? ' invalid' : ''}`} aria-live="polite"><span>{form.splitType === 'shares' && !validShares ? 'Each person needs a share greater than zero' : form.splitType === 'unequal' && !isUnequalSplitValid ? `Rs. ${Math.abs(unequalDiff).toFixed(2)} ${unequalDiff < 0 ? 'over the bill total' : 'left to allocate'}` : 'Everything adds up'}</span><strong>Total Rs. {form.total.toFixed(2)}</strong></div>
+                </section>}
+                {saveError && <p className="form-error" role="alert">{saveError}</p>}
                 <motion.button
                     whileTap={{ scale: 0.97 }}
                     disabled={!canSubmit || submitting}
@@ -510,127 +356,26 @@ function ExpenseSheet({ isOpen, onClose, mode, allFriends, allGroups, preFriends
 }
 
 
-function SettleSheet({ isOpen, onClose, name, totalOwed, onConfirm }) {
-    const [submitting, setSubmitting] = useState(false);
-    const [syncWithBudget, setSyncWithBudget] = useState(false);
-    const abs = Math.abs(totalOwed);
-    const [amt, setAmt] = useState(String(abs));
-    const parsed = parseFloat(amt) || 0;
-    const isPartial = parsed < abs && parsed > 0;
-    const canPay = parsed > 0 && parsed <= abs;
-
-    const chips = [100, 200, 500, 1000].filter(v => v < abs);
-
-    return (
-        <BottomSheet isOpen={isOpen} onClose={onClose} title="Settle Up">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 8 }}>
-
-                {/* Context line */}
-                <div style={{ fontSize: 13, color: 'var(--text-3)', fontWeight: 500, lineHeight: 1.5 }}>
-                    {totalOwed > 0
-                        ? <>{name} owes you a total of <strong style={{ color: '#c9f158' }}>₹{fmt(abs)}</strong>. How much are they paying now?</>
-                        : <>You owe {name} a total of <strong style={{ color: '#EF4444' }}>₹{fmt(abs)}</strong>. How much are you paying now?</>
-                    }
-                </div>
-
-                {/* Big amount input */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#ffffff', borderRadius: 28, padding: '12px 14px', border: `1.5px solid ${canPay ? '#202020' : '#2020206a'}`, transition: 'border-color 0.2s' }}>
-                    <span style={{ fontSize: 26, fontWeight: 700, color: 'var(--text-3)' }}>₹</span>
-                    <input inputMode='decimal' type="number" value={amt} onChange={e => setAmt(e.target.value)} style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 27, fontWeight: 800, fontFamily: "'Montserrat', sans-serif", color: '#202020', letterSpacing: '-1px' }} />
-                </div>
-
-                {/* Quick chips */}
-                <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-                    {chips.map(v => (
-                        <div key={v} onClick={() => setAmt(String(v))} style={{ padding: '6px 13px', borderRadius: 99, cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: "'Montserrat', sans-serif", background: parsed === v ? '#202020' : '#f2f3f5', color: parsed === v ? '#ffffff' : 'var(--text-3)', transition: 'all 0.15s' }}>
-                            ₹{v.toLocaleString('en-IN')}
-                        </div>
-                    ))}
-                    <div onClick={() => setAmt(String(abs))} style={{ padding: '6px 13px', borderRadius: 99, cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: "'Montserrat', sans-serif", background: parsed === abs ? '#c9f158' : '#f2f3f5', color: parsed === abs ? '#202020' : 'var(--text-3)', transition: 'all 0.15s' }}>
-                        Full ₹{fmt(abs)}
-                    </div>
-                </div>
-                    
-                <div //toggle
-                    onClick={() => setSyncWithBudget(!syncWithBudget)}
-                    style={{
-                        padding: '14px 16px', borderRadius: '30px',
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        cursor: 'pointer', marginTop: '4px'
-                    }}
-                >
-                    <div>
-                        <div style={{ fontSize: '14px', fontWeight: '700', color: '#202020', fontFamily: 'Montserrat' }}>Log this as an Expense?</div>
-                    </div>
-                    <div style={{
-                        width: '55px', height: '25px', background: syncWithBudget ? '#202020' : '#ebecef',
-                        borderRadius: '20px', position: 'relative', transition: '0.3s'
-                    }}>
-                        <div style={{
-                            width: '19px', height: '19px', background: '#fff', borderRadius: '50%',
-                            position: 'absolute', top: '3px', left: syncWithBudget ? '33px' : '3px',
-                            transition: '0.3s cubic-bezier(0.175, 0.885, 0.32, 1.2)',
-                            boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-                        }} />
-                    </div>
-                </div>
-
-                <AnimatePresence>
-                    {isPartial && (
-                        <motion.div {...fadeUp} style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 11, padding: '10px 14px', fontSize: 12, color: '#92400E', fontWeight: 500, lineHeight: 1.5 }}>
-                            Partial payment — <strong>₹{fmt(abs - parsed)}</strong> will remain outstanding after this.
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
-                {parsed > abs && (
-                    <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 11, padding: '10px 14px', fontSize: 12, color: '#DC2626', fontWeight: 600 }}>
-                        Amount exceeds the outstanding balance of ₹{fmt(abs)}.
-                    </div>
-                )}
-
-                <button disabled={!canPay || submitting} onClick={async () => {
-                    setSubmitting(true);
-                    try {
-                        await onConfirm(parsed, syncWithBudget);
-                    } finally {
-                        setSubmitting(false);
-                    }
-                }} style={{ background: canPay ? '#202020' : '#f2f3f5', color: canPay ? '#ffffff' : 'var(--text-3)', border: 'none', borderRadius: 24, padding: '15px', fontSize: 14, fontWeight: 800, fontFamily: "'Montserrat', sans-serif", cursor: canPay ? 'pointer' : 'not-allowed', transition: 'all 0.15s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                    {submitting ? 'Saving...' : (!isPartial && canPay ? <><CheckCircle2 size={16} /> Mark Fully Settled</> : 'Record Partial Payment')}
-                </button>
-            </div>
-        </BottomSheet>
-    );
-}
-
 function ExpenseList({ expenses, onDelete, onEdit, emptyTip, user }) {
-    if (!expenses || expenses.length === 0) return <ProTip text={emptyTip} />;
+    const [actionError,setActionError]=useState('');
+    const [pendingDelete,setPendingDelete]=useState(null);
+    const [deleting,setDeleting]=useState(false);
+    const requestDelete = item => {
+        if(hasAppliedPayments(item)){setActionError('');onEdit(item);return;}
+        setActionError('');setPendingDelete(item);
+    };
+    const groupedData = useMemo(() => groupExpenseHistory(expenses || []), [expenses]);
 
-    const groupedData = useMemo(() => {
-        const months = {};
-        const sorted = [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date));
-
-        sorted.forEach(item => {
-            const d = new Date(item.date);
-            const monthKey = d.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
-            const dayKey = d.toLocaleDateString('en-IN', { month: 'long', day: 'numeric' }) + ', ' + d.toLocaleDateString('en-IN', { weekday: 'short' });
-
-            if (!months[monthKey]) months[monthKey] = { days: {}, totalSpent: 0 };
-            if (!months[monthKey].days[dayKey]) months[monthKey].days[dayKey] = { items: [], dailyTotal: 0 };
-
-            months[monthKey].days[dayKey].items.push(item);
-
-            if (item.type === 'expense') {
-                months[monthKey].totalSpent += parseFloat(item.amount || 0);
-                months[monthKey].days[dayKey].dailyTotal += parseFloat(item.amount || 0);
-            }
-        });
-        return months;
-    }, [expenses]);
+    if (!expenses?.length) return <ProTip text={emptyTip} />;
 
     return (
         <motion.div variants={stagger} initial="initial" animate="animate">
+            {actionError && <p className="form-error action-error" role="alert">{actionError}</p>}
+            <BottomSheet isOpen={Boolean(pendingDelete)} onClose={()=>{if(!deleting)setPendingDelete(null);}} title={pendingDelete?.type==='payment'?'Undo this payment?':'Delete this bill?'}>
+                <p className="field-help">{pendingDelete?.type==='payment'?'This reverses the recorded payment and restores the balance. No money is transferred. If it covers multiple bills or groups, all its allocations are reversed.':'This removes the bill and its shares from everyone’s balances.'}</p>
+                {actionError && <p role="alert" className="form-error">{actionError}</p>}
+                <button className="button-primary" disabled={deleting} onClick={async()=>{setDeleting(true);try{await onDelete(pendingDelete.id);setPendingDelete(null);}catch(err){setActionError(err.message || 'Could not update this entry.');}finally{setDeleting(false);}}}>{deleting?'Saving…':pendingDelete?.type==='payment'?'Undo payment':'Delete bill'}</button>
+            </BottomSheet>
             {Object.entries(groupedData).map(([monthStr, monthData]) => (
                 <div key={monthStr} style={{ marginBottom: 32 }}>
 
@@ -640,7 +385,7 @@ function ExpenseList({ expenses, onDelete, onEdit, emptyTip, user }) {
                             {monthStr}
                         </div>
                         <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '1px', marginTop: '3px' }}>
-                            TOTAL <span style={{ color: '#202020' }}>₹{monthData.totalSpent.toLocaleString('en-IN')}</span>
+                            BILLS LOGGED <span style={{ color: '#202020' }}>Rs. {monthData.totalSpent.toLocaleString('en-IN')}</span>
                         </div>
                     </div>
 
@@ -652,7 +397,7 @@ function ExpenseList({ expenses, onDelete, onEdit, emptyTip, user }) {
                                 <div style={{ padding: '12px 16px 4px', display: 'flex', justifyContent: 'space-between' }}>
                                     <span style={{ fontSize: 13, fontWeight: 700, color: '#202020' }}>{dayStr}</span>
                                     {dayData.dailyTotal > 0 && (
-                                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-3)' }}>₹{dayData.dailyTotal.toLocaleString('en-IN')}</span>
+                                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-3)' }}>Rs. {dayData.dailyTotal.toLocaleString('en-IN')}</span>
                                     )}
                                 </div>
 
@@ -664,13 +409,13 @@ function ExpenseList({ expenses, onDelete, onEdit, emptyTip, user }) {
                                     return (
                                         <motion.div key={item.id} variants={slideUp}>
                                             <SwipeableItem
-                                                onSwipeLeft={() => onDelete(item.id)}
+                                                onSwipeLeft={() => requestDelete(item)}
                                                 onSwipeRight={isPayment ? null : () => onEdit(item)}
-                                                leftLabel="Delete"
+                                                leftLabel={isPayment ? "Undo" : "Delete"}
                                                 rightLabel={isPayment ? null : "Edit"}
                                             >
                                                 <div style={{
-                                                    display: 'flex', alignItems: 'center', gap: 12, padding: '16px 16px',
+                                                    display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, padding: '16px 16px',
                                                     borderBottom: idx < dayData.items.length - 1 ? '1px solid #f2f3f5' : 'none',
                                                     background: '#ffffff',
                                                     opacity: isSettled ? 0.75 : 1
@@ -702,7 +447,7 @@ function ExpenseList({ expenses, onDelete, onEdit, emptyTip, user }) {
                                                                     {item.paidByName} → {item.paidToName}
                                                                 </span>
                                                             ) : (
-                                                                <>{item.paidByName} paid · <span style={{ opacity: 0.7 }}>{item.groupName || 'Private'}</span></>
+                                                                <>{item.paidByName} paid · <span style={{ opacity: 0.7 }}>{item.groupName || 'With friends'}</span></>
                                                             )}
                                                         </div>
                                                     </div>
@@ -710,20 +455,31 @@ function ExpenseList({ expenses, onDelete, onEdit, emptyTip, user }) {
                                                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
                                                         <div style={{
                                                             fontSize: 17, fontWeight: 800,
-                                                            color: isPayment ? '#6366f1' : '#202020',
+                                                            color: '#202020',
                                                             fontFamily: "'Montserrat', sans-serif",
                                                             textDecoration: isSettled ? 'line-through' : 'none',
                                                             opacity: isSettled ? 0.5 : 1
                                                         }}>
-                                                            ₹{parseFloat(item.amount).toLocaleString('en-IN')}
+                                                            Rs. {parseFloat(item.amount).toLocaleString('en-IN')}
                                                         </div>
 
                                                         {!isPayment && !isSettled && item.yourShare > 0 && (
-                                                            <div style={{ fontSize: 11, fontWeight: 700, color: '#c9f158', background: '#202020', padding: '2px 8px', borderRadius: 6, display: 'inline-block', marginTop: 4 }}>
-                                                                you owe ₹{parseFloat(item.yourShare).toLocaleString('en-IN')}
+                                                            <div style={{ fontSize: 11, fontWeight: 700, color: '#b54535', background: '#fff1ec', padding: '2px 8px', borderRadius: 6, display: 'inline-block', marginTop: 4 }}>
+                                                                you owe Rs. {parseFloat(item.yourShare).toLocaleString('en-IN')}
                                                             </div>
                                                         )}
                                                     </div>
+                                                        <div className="entry-actions">{!isPayment && <button onClick={()=>onEdit(item)}>Edit bill</button>}<button onClick={()=>requestDelete(item)}>{isPayment?'Undo payment':'Delete bill'}</button></div>
+                                                        {!isPayment && <details className="entry-breakdown">
+                                                            <summary>View split · {item.splits?.length || 0} people</summary>
+                                                            <div className="split-total"><span>Bill total</span><strong>Rs. {fmt(item.amount)}</strong></div>
+                                                            <div className="split-total"><span>Paid by</span><strong>{item.paidByName}</strong></div>
+                                                            <div className="split-total"><span>Expense date</span><strong>{new Date(item.date).toLocaleDateString('en-IN', {day:'numeric',month:'short',year:'numeric'})}</strong></div>
+                                                            {(item.splits || []).map(split => <div className="split-person" key={split.userId}>
+                                                                <span>{split.userId === user?.id ? 'You' : split.name}<small>{split.userId === item.paidBy ? 'Paid the bill' : split.isPaid ? 'Settled' : `Rs. ${fmt(Math.max(0, split.amount - (Number(split.paidAmount) || 0)))} remaining`}</small></span>
+                                                                <strong>Rs. {fmt(split.amount)}</strong>
+                                                            </div>)}
+                                                        </details>}
                                                 </div>
                                             </SwipeableItem>
                                         </motion.div>
@@ -744,31 +500,36 @@ function AddFriendSheet({ isOpen, onClose, onAdded }) {
     const [phone, setPhone] = useState('');
     const [result, setResult] = useState(null);
     const [added, setAdded] = useState(false);
+    const [adding, setAdding] = useState(false);
+    const [error, setError] = useState('');
     const [searching, setSearching] = useState(false);
 
     const handleSearch = async () => {
-        if (phone.length < 10) return;
+        if (!phoneNumber(phone) || searching) return;
         setSearching(true);
+        setError('');
         setResult(null);
 
         try {
-            const res = await searchByPhone(phone);
+            const res = await searchByPhone(phoneNumber(phone));
             if (res && res.name) {
                 setResult({ found: true, user: res });
             } else {
                 setResult({ found: false });
             }
         } catch (e) {
-            setResult({ found: false });
+            setError(e.message || 'Could not search right now. Please retry.');
         } finally {
             setSearching(false);
         }
     };
 
     const handleAdd = async () => {
-        setAdded(true);
+        if (adding || added) return;
+        setAdding(true); setError('');
         try {
             await addFriend(result.user.id);
+            setAdded(true);
             if (onAdded) onAdded();
             setTimeout(() => {
                 onClose();
@@ -778,728 +539,94 @@ function AddFriendSheet({ isOpen, onClose, onAdded }) {
             }, 800);
         } catch (e) {
             setAdded(false);
-        }
+            setError(e.message || 'Could not add your friend. Please retry.');
+        } finally { setAdding(false); }
     };
 
     const inviteLink = `https://blip-eta.vercel.app/join`;
 
-    return (
-        <BottomSheet isOpen={isOpen} onClose={onClose} title="Add Friend">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20, paddingBottom: 10 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '1px', marginLeft: 4 }}>
-                        Find by Phone
-                    </div>
-
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 12,
-                        background: '#ffffff',
-                        borderRadius: 32,
-                        padding: '12px 16px',
-                        border: `1px solid ${phone.length === 10 ? '#202020' : '#e5e7eb'}`,
-                        transition: 'all 0.2s ease',
-                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontSize: 16, fontWeight: 700, color: '#202020', opacity: 0.4 }}>+91</span>
-                            <div style={{ width: '1px', height: '16px', background: '#e5e7eb' }} />
-                        </div>
-
-                        <input
-                            type="tel"
-                            maxLength={10}
-                            value={phone}
-                            onChange={e => {
-                                setPhone(e.target.value.replace(/\D/g, ''));
-                                setResult(null);
-                                setAdded(false);
-                            }}
-                            placeholder="99887 45678"
-                            style={{
-                                flex: 1,
-                                border: 'none',
-                                outline: 'none',
-                                background: 'transparent',
-                                fontSize: '17px',
-                                fontWeight: 700,
-                                fontFamily: "'Montserrat', sans-serif",
-                                color: '#202020',
-                                letterSpacing: '1.5px'
-                            }}
-                        />
-                        {phone.length === 10 && (
-                            <motion.button
-                                whileTap={{ scale: 0.9 }}
-                                onClick={handleSearch}
-                                disabled={searching}
-                                style={{
-                                    width: 38,
-                                    height: 38,
-                                    borderRadius: 20,
-                                    background: '#202020',
-                                    color: '#ffffff',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    cursor: 'pointer',
-                                    border: 'none'
-                                }}
-                            >
-                                {searching ? (
-                                    <motion.div
-                                        animate={{ rotate: 360 }}
-                                        transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-                                    >
-                                        <Loader2 size={20} />
-                                    </motion.div>
-                                ) : (
-                                    <Search size={20} color="#c9f158" strokeWidth={3} />
-                                )}
-                            </motion.button>
-                        )}
-                    </div>
-                </div>
-                <AnimatePresence mode="wait">
-                    {result?.found && (
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            style={{
-                                border: '1px solid rgba(5, 150, 105, 0.1)',
-                                borderRadius: 28,
-                                padding: '18px 20px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 14
-                            }}
-                        >
-                            <Avatar initials={result.user.name.substring(0, 2)} size={48} />
-                            <div style={{ flex: 1 }}>
-                                <div style={{ fontSize: 17, fontWeight: 700, color: '#202020', fontFamily: "'Montserrat', sans-serif" }}>
-                                    {result.user.name}
-                                </div>
-                                <div style={{ fontSize: 11, color: '#059669', fontWeight: 500, marginTop: 1 }}>
-                                    Member since {new Date().getFullYear()}
-                                </div>
-                            </div>
-
-                            <motion.button
-                                whileTap={{ scale: 0.95 }}
-                                onClick={handleAdd}
-                                style={{
-                                    background: added ? '#059669' : '#202020',
-                                    color: '#ffffff',
-                                    border: 'none',
-                                    borderRadius: 16,
-                                    padding: '10px 16px',
-                                    fontSize: 12,
-                                    fontWeight: 800,
-                                    fontFamily: "'Montserrat', sans-serif",
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 6,
-                                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-                                }}
-                            >
-                                {added ? <><Check size={14} strokeWidth={3} /> DONE</> : <><UserPlus size={14} /> ADD</>}
-                            </motion.button>
-                        </motion.div>
-                    )}
-
-                    {result?.found === false && (
-                        <div style={{
-                            background: '#ffffff',
-                            borderRadius: 28,
-                            padding: '32px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: 16,
-                            border: '1px solid #e5e7eb',
-                            boxShadow: '0 10px 30px rgba(0,0,0,0.03)'
-                        }}>
-                            <div style={{
-                                padding: 5,
-                                background: '#fff',
-                                borderRadius: 32,
-                                boxShadow: '0 4px 15px rgba(0,0,0,0.05)',
-                                border: '1px solid #f0f0f0'
-                            }}>
-                                <QRCodeSVG
-                                    value={inviteLink}
-                                    size={150}
-                                    bgColor={"#ffffff"}
-                                    fgColor={"#202020"}
-                                    level={"H"}
-                                    includeMargin={true}
-                                />
-                            </div>
-
-                            <div style={{ textAlign: 'center' }}>
-                                <div style={{ fontSize: 18, fontWeight: 700, color: '#202020', fontFamily: "'Montserrat', sans-serif" }}>
-                                    Not on Blip? Scan to Join!
-                                </div>
-                                <div style={{ fontSize: 13, color: 'var(--text-3)', fontWeight: 500, marginTop: 4 }}>
-                                    Your unique invite link
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </AnimatePresence>
-            </div>
-        </BottomSheet>
-    );
+    return <BottomSheet isOpen={isOpen} onClose={onClose} title="Add a friend">
+        <div className="connection-intro"><span className="connection-icon"><UserPlus size={24}/></span><div><h3>Start with someone you know</h3><p>Find them using the number they saved on Blip.</p></div></div>
+        <div className="connection-form"><label className="input-label">Their phone number</label><PhoneInput value={phone} onChange={value => { setPhone(value); setResult(null); setAdded(false); setError(''); }}/><p className="field-help">Choose their country first, then enter their number.</p>
+        <button className="button-primary connection-submit" disabled={!phoneNumber(phone) || searching || adding} onClick={handleSearch}><Search size={17}/>{searching ? 'Finding your friend…' : 'Find friend'}</button></div>
+        {error && <p className="form-error" role="alert">{error}</p>}
+        {result?.found && <div className="friend-search-result" role="status"><Avatar initials={result.user.name.substring(0,2)} size={44}/><div><strong>{result.user.name}</strong><small>Ready to split with you</small></div><button className="button-primary" disabled={adding || added} onClick={handleAdd}>{adding ? 'Adding…' : added ? 'Added' : 'Add'}{added ? <Check size={16}/> : <Plus size={16}/>}</button></div>}
+        {result?.found === false && <div className="friend-not-found" role="status"><strong>No account found yet</strong><p>Check the number, or ask your friend to join Blip and add their number in Profile.</p></div>}
+        <details className="friend-invite"><summary>New to Blip? Invite them <UserPlus size={16}/></summary><p className="field-help">Share this link or let them scan the code, then search for their number once they’ve joined.</p><div className="invite-code"><QRCodeSVG value={inviteLink} size={112}/><div><a href={inviteLink} target="_blank" rel="noreferrer">blip-eta.vercel.app/join</a><button className="button-secondary" onClick={async()=>{try{await navigator.clipboard.writeText(inviteLink);toast.success('Invite link copied');}catch{setError('Could not copy the link. You can select and copy it above.');}}}>Copy invite link</button></div></div></details>
+    </BottomSheet>;
 }
 
 
-function CreateGroupSheet({ isOpen, onClose, allFriends, onGroupCreated }) {
+function CreateGroupSheet({ isOpen, onClose, allFriends = [], onGroupCreated }) {
     const { createGroup } = useApp();
     const [name, setName] = useState('');
     const [icon, setIcon] = useState('🏠');
-    const [searchQuery, setSearchQuery] = useState('');
-    const [sel, setSel] = useState([]);
-    const [isCreating, setIsCreating] = useState(false);
-
-    const filteredFriends = useMemo(() => {
-        return (allFriends || []).filter(f =>
-            f.name.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-    }, [allFriends, searchQuery]);
-
-    const selectedMembers = (allFriends || []).filter(f => sel.includes(f.id));
-
-    const toggleMember = (id) => {
-        setSel(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
-    };
-
-    const handleCreate = async () => {
-        if (!name.trim() || isCreating) return;
-
-        setIsCreating(true);
+    const [search, setSearch] = useState('');
+    const [selected, setSelected] = useState([]);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState('');
+    const matches = allFriends.filter(friend => friend.name.toLowerCase().includes(search.toLowerCase()));
+    const create = async () => {
+        if (!name.trim() || saving) return;
+        setSaving(true); setError('');
         try {
-            await createGroup({ name, icon, memberIds: sel });
-            if (onGroupCreated) onGroupCreated();
-            setName(''); setIcon('🏷️'); setSel([]); setSearchQuery('');
+            await createGroup({ name: name.trim(), icon, memberIds: selected });
+            onGroupCreated?.();
+            setName(''); setSelected([]); setSearch(''); setIcon('🏠');
             onClose();
-        } catch (e) {
-            setIsCreating(false);
-        }
+        } catch (err) { setError(err.message || 'Could not create this group. Please try again.'); }
+        finally { setSaving(false); }
     };
-
-    return (
-        <BottomSheet isOpen={isOpen} onClose={onClose} title="Create Group">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 24, paddingBottom: 16 }}>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    <div style={{
-                        width: 64, height: 64, borderRadius: 20, background: '#f8f9fa',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 30, border: '1px solid #e5e7eb', boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
-                    }}>
-                        {icon}
-                    </div>
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                            Group Name
-                        </div>
-                        <input
-                            placeholder="e.g. Goa Trip"
-                            value={name}
-                            onChange={e => setName(e.target.value)}
-                            style={{
-                                width: '100%', border: 'none', borderBottom: '2px solid #202020',
-                                background: 'transparent', padding: '8px 0', fontSize: 18,
-                                fontWeight: 700, fontFamily: "'Montserrat', sans-serif", color: '#202020', outline: 'none'
-                            }}
-                        />
-                    </div>
-                </div>
-                <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 10, margin: '0 -4px' }}>
-                    {GROUP_ICONS.map(ic => (
-                        <motion.div
-                            key={ic}
-                            whileTap={{ scale: 0.9 }}
-                            onClick={() => setIcon(ic)}
-                            style={{
-                                minWidth: 58, height: 58, borderRadius: 18, fontSize: 20,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                cursor: 'pointer', background: icon === ic ? '#202020' : '#f2f3f553',
-                                border: `1px solid ${icon === ic ? '#202020' : '#585858ff'}`,
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            {ic}
-                        </motion.div>
-                    ))}
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                            Add Members ({sel.length})
-                        </div>
-                    </div>
-
-                    <AnimatePresence>
-                        {selectedMembers.length > 0 && (
-                            <motion.div
-                                initial={{ height: 0, opacity: 0, marginBottom: 0 }}
-                                animate={{ height: 'auto', opacity: 1, marginBottom: 16 }}
-                                exit={{ height: 0, opacity: 0, marginBottom: 0 }}
-                                style={{
-                                    display: 'flex',
-                                    gap: 8,
-                                    overflowX: 'auto',
-                                    padding: '4px 0',
-                                    scrollbarWidth: 'none',
-                                    msOverflowStyle: 'none'
-                                }}
-                            >
-                                {selectedMembers.map(m => (
-                                    <motion.div
-                                        key={m.id}
-                                        layout
-                                        initial={{ scale: 0.8, opacity: 0 }}
-                                        animate={{ scale: 1, opacity: 1 }}
-                                        exit={{ scale: 0.8, opacity: 0 }}
-                                        onClick={() => toggleMember(m.id)}
-                                        style={{
-                                            flexShrink: 0,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: 8,
-                                            background: '#ffffff',
-                                            border: '1px solid #8e8e8eff',
-                                            padding: '6px 6px 6px 10px',
-                                            borderRadius: 99,
-                                            cursor: 'pointer',
-                                            boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
-                                        }}
-                                    >
-                                        <Avatar initials={m.initials} size={24} />
-                                        <span style={{
-                                            fontSize: 13,
-                                            fontWeight: 700,
-                                            color: '#202020',
-                                            fontFamily: "'Montserrat', sans-serif"
-                                        }}>
-                                            {m.name.split(' ')[0]}
-                                        </span>
-                                        <div style={{
-                                            width: 20,
-                                            height: 20,
-                                            borderRadius: '50%',
-                                            background: '#202020',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center'
-                                        }}>
-                                            <X size={10} color="#fff" strokeWidth={3} />
-                                        </div>
-                                    </motion.div>
-                                ))}
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-
-                    <div style={{
-                        display: 'flex', alignItems: 'center', gap: 10, background: '#ffffff', height: 54,
-                        borderRadius: 25, padding: '12px 16px', border: '1px solid #e5e7eb', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', marginBottom: 12
-                    }}>
-                        <Search size={20} color="var(--text-3)" />
-                        <input
-                            placeholder="Search friends..."
-                            value={searchQuery}
-                            onChange={e => setSearchQuery(e.target.value)}
-                            style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 14, fontWeight: 600, fontFamily: "'Montserrat', sans-serif" }}
-                        />
-                    </div>
-
-                    <div style={{
-                        maxHeight: 200, overflowY: 'auto', background: '#ffffff',
-                        borderRadius: 25, border: searchQuery ? '1px solid #e5e7eb' : 'none'
-                    }}>
-                        {searchQuery && filteredFriends.map((f, idx) => (
-                            <div
-                                key={f.id}
-                                onClick={() => toggleMember(f.id)}
-                                style={{
-                                    display: 'flex', alignItems: 'center', gap: 12, padding: '16px 16px',
-                                    borderBottom: idx < filteredFriends.length - 1 ? '1px solid #f0f0f0' : 'none',
-                                    background: sel.includes(f.id) ? 'rgba(201, 241, 88, 0.05)' : 'transparent'
-                                }}
-                            >
-                                <Avatar initials={f.initials} size={35} />
-                                <div style={{ flex: 1, fontSize: 15, fontWeight: 600, color: '#202020' }}>{f.name}</div>
-                                {sel.includes(f.id) ? (
-                                    <Check size={16} color="#059669" strokeWidth={4} />
-                                ) : (
-                                    <Plus size={16} color="var(--text-3)" strokeWidth={4} />
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-                <motion.button
-                    whileTap={{ scale: isCreating ? 1 : 0.97 }}
-                    disabled={!name.trim() || isCreating}
-                    onClick={handleCreate}
-                    style={{
-                        background: name.trim() && !isCreating ? '#202020' : '#c4c4c5c4',
-                        color: name.trim() && !isCreating ? '#ffffff' : '#ffffff',
-                        border: 'none',
-                        borderRadius: 25,
-                        padding: '18px',
-                        fontSize: 14,
-                        fontWeight: 800,
-                        fontFamily: "'Montserrat', sans-serif",
-                        cursor: name.trim() && !isCreating ? 'pointer' : 'not-allowed',
-                        boxShadow: name.trim() && !isCreating ? '0 10px 25px rgba(0,0,0,0.1)' : 'none',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 10
-                    }}
-                >
-                    {isCreating ? (
-                        <>
-                            <motion.div
-                                animate={{ rotate: 360 }}
-                                transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-                                style={{ display: 'flex' }}
-                            >
-                                <Loader2 size={25} />
-                            </motion.div>
-                        </>
-                    ) : (
-                        "CREATE GROUP"
-                    )}
-                </motion.button>
-            </div>
-        </BottomSheet>
-    );
+    return <BottomSheet isOpen={isOpen} onClose={onClose} title="Create a group">
+        <div className="connection-intro"><span className="connection-icon"><Users size={24}/></span><div><h3>Your people. One shared tab.</h3><p>Keep a trip, a home, or a shared plan together.</p></div></div>
+        <label className="input-label" htmlFor="new-group-name">Group name</label>
+        <div className="search-field"><span aria-hidden="true">{icon}</span><input id="new-group-name" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Goa weekend" maxLength={100}/></div>
+        <details className="group-icon-disclosure"><summary>Choose a group icon <span aria-hidden="true">{icon}</span></summary><div className="group-icon-picker" aria-label="Group icon">{GROUP_ICONS.map(emoji => <button type="button" key={emoji} aria-label={`Group icon ${emoji}`} aria-pressed={icon === emoji} onClick={() => setIcon(emoji)}>{emoji}</button>)}</div></details>
+        <div className="group-members-heading"><h3>Who’s joining?</h3><span>{selected.length + 1} {selected.length ? 'members' : 'member'} including you</span></div>
+        <p className="field-help">You’re already in. Select friends below to add them.</p>
+        {allFriends.length > 0 ? <><div className="search-field"><Search size={18}/><input aria-label="Search group members" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search your friends"/></div><div className="group-member-options">{matches.map(friend => <button type="button" key={friend.id} aria-pressed={selected.includes(friend.id)} onClick={() => setSelected(ids => ids.includes(friend.id) ? ids.filter(id => id !== friend.id) : [...ids, friend.id])}><Avatar initials={friend.initials} size={35}/><span>{friend.name}</span>{selected.includes(friend.id) ? <Check size={19}/> : <Plus size={19}/>}</button>)}</div>{!matches.length && <p className="field-help">No friends match that name.</p>}</> : <p className="privacy-note">You can create this group now. Then use Add friend on the Friends page and invite them from your group settings.</p>}
+        {error && <p className="form-error" role="alert">{error}</p>}
+        <button className="button-primary group-create-button" disabled={!name.trim() || saving} onClick={create}>{saving ? 'Creating…' : 'Create group'}<ArrowRight size={17}/></button>
+    </BottomSheet>;
 }
 
 // ── Group settings sheet ──────────────────────────────────────────────────────
-function GroupSettingsSheet({ isOpen, onClose, group, allFriends, onSave, onRemoveMember, onAddMember, onDeleteGroup }) {
-    const [name, setName] = useState(group?.name || '');
-    const [icon, setIcon] = useState(group?.icon || '🏷️');
-    const [saving, setSaving] = useState(false);
-    const [searchQuery, setSearchQuery] = useState('');
-
-    // Keep in sync when group prop changes
-    useEffect(() => {
-        if (group) {
-            setName(group.name || '');
-            setIcon(group.icon || '🏷️');
-        }
-    }, [group]);
-
+function GroupSettingsSheet({ isOpen, onClose, group, allFriends = [], onSave, onRemoveMember, onAddMember, onDeleteGroup }) {
+    const { user } = useApp();
+    const [name,setName] = useState('');
+    const [icon,setIcon] = useState('🏠');
+    const [search,setSearch] = useState('');
+    const [busy,setBusy] = useState(false);
+    const [error,setError] = useState('');
+    useEffect(()=>{ if(isOpen){setName(group?.name || '');setIcon(group?.icon || '🏠');setSearch('');setError('');} },[isOpen,group?.id]);
     const members = group?.members || [];
-
-    const handleSave = async () => {
-        if (!group || !name.trim()) return;
-        setSaving(true);
-        try {
-            await onSave(group.id, { name: name.trim(), icon });
-            onClose();
-        } catch (e) {
-            toast.error(e.message || 'Failed to update group');
-        } finally {
-            setSaving(false);
-        }
-    };
-    return (
-        <BottomSheet isOpen={isOpen} onClose={onClose} title="Group Settings">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 24, paddingBottom: 16 }}>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    <div style={{
-                        width: 64, height: 64, borderRadius: 22, background: '#f8f9fa',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 30, border: '1px solid #e5e7eb', boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
-                    }}>
-                        {icon}
-                    </div>
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                            Group Name
-                        </div>
-                        <input
-                            placeholder="e.g. Goa Trip"
-                            value={name}
-                            onChange={e => setName(e.target.value)}
-                            style={{
-                                width: '100%', border: 'none', borderBottom: '2px solid #202020',
-                                background: 'transparent', padding: '8px 0', fontSize: 20,
-                                fontWeight: 700, fontFamily: "'Montserrat', sans-serif", color: '#202020', outline: 'none'
-                            }}
-                        />
-                    </div>
-                </div>
-
-                <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 10, margin: '0 -4px', scrollbarWidth: 'none' }}>
-                    {GROUP_ICONS.map(ic => (
-                        <motion.div
-                            key={ic}
-                            whileTap={{ scale: 0.9 }}
-                            onClick={() => setIcon(ic)}
-                            style={{
-                                minWidth: 58, height: 58, borderRadius: 22, fontSize: 20,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                cursor: 'pointer', background: icon === ic ? '#202020' : '#f2f3f553',
-                                border: `1px solid ${icon === ic ? '#202020' : '#585858ff'}`,
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            {ic}
-                        </motion.div>
-                    ))}
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                        Current Members ({members.length})
-                    </div>
-
-                    <div style={{
-                        display: 'flex', gap: 8, overflowX: 'auto', padding: '4px 0',
-                        scrollbarWidth: 'none', msOverflowStyle: 'none'
-                    }}>
-                        <AnimatePresence>
-                            {members.map(m => (
-                                <motion.div
-                                    key={m.id}
-                                    layout
-                                    initial={{ scale: 0.8, opacity: 0 }}
-                                    animate={{ scale: 1, opacity: 1 }}
-                                    exit={{ scale: 0.8, opacity: 0 }}
-                                    onClick={() => m.id !== 'me' && group?.id && onRemoveMember(group.id, m.id)}
-                                    style={{
-                                        flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8,
-                                        background: '#ffffff', border: '1px solid #e5e7eb',
-                                        padding: '6px 6px 6px 10px', borderRadius: 99,
-                                        cursor: m.id === 'me' ? 'default' : 'pointer',
-                                        boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
-                                    }}
-                                >
-                                    <Avatar initials={m.initials} size={24} />
-                                    <span style={{ fontSize: 13, fontWeight: 700, color: '#202020', fontFamily: "'Montserrat', sans-serif" }}>
-                                        {m.name.split(' ')[0]} {m.id === 'me' ? '(You)' : ''}
-                                    </span>
-                                    {m.id !== 'me' && (
-                                        <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                            <X size={10} color="#fff" strokeWidth={3} />
-                                        </div>
-                                    )}
-                                </motion.div>
-                            ))}
-                        </AnimatePresence>
-                    </div>
-
-                    <div style={{
-                        display: 'flex', alignItems: 'center', gap: 10, background: '#ffffff', height: 54,
-                        borderRadius: 25, padding: '12px 16px', border: '1px solid #e5e7eb', boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
-                    }}>
-                        <Search size={20} color="var(--text-3)" />
-                        <input
-                            placeholder="Add Members?"
-                            value={searchQuery}
-                            onChange={e => setSearchQuery(e.target.value)}
-                            style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 14, fontWeight: 600, fontFamily: "'Montserrat', sans-serif" }}
-                        />
-                    </div>
-
-                    {searchQuery && (
-                        <div style={{ maxHeight: 200, overflowY: 'auto', background: '#ffffff', borderRadius: 25, border: '1px solid #e5e7eb' }}>
-                            {allFriends.filter(f =>
-                                f.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
-                                !members.find(m => m.id === f.id)
-                            ).map((f, idx, arr) => (
-                                <div
-                                    key={f.id}
-                                    onClick={() => {
-                                        onAddMember(group.id, f.id);
-                                        setSearchQuery('');
-                                    }}
-                                    style={{
-                                        display: 'flex', alignItems: 'center', gap: 12, padding: '16px 16px',
-                                        borderBottom: idx < arr.length - 1 ? '1px solid #f0f0f0' : 'none'
-                                    }}
-                                >
-                                    <Avatar initials={f.initials} size={35} />
-                                    <div style={{ flex: 1, fontSize: 15, fontWeight: 600, color: '#202020' }}>{f.name}</div>
-                                    <Plus size={16} color="#202020" strokeWidth={4} />
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
-                    <motion.button
-                        whileTap={{ scale: saving ? 1 : 0.97 }}
-                        disabled={!name.trim() || saving}
-                        onClick={handleSave}
-                        style={{
-                            background: '#202020', color: '#ffffff', border: 'none', borderRadius: 25,
-                            padding: '18px', fontSize: 14, fontWeight: 800, fontFamily: "'Montserrat', sans-serif",
-                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10
-                        }}
-                    >
-                        {saving ? <Loader2 size={20} className="animate-spin" /> : "SAVE CHANGES"}
-                    </motion.button>
-
-                    {onDeleteGroup && (
-                        <motion.div
-                            whileTap={{ scale: 0.97 }}
-                            onClick={() => {
-                                if (window.confirm("Delete this group and all its history?")) {
-                                    group?.id && onDeleteGroup(group.id);
-                                }
-                            }}
-                            style={{
-                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                                padding: '16px', background: '#fff5f5', borderRadius: 25,
-                                cursor: 'pointer', border: '1px solid #fee2e2'
-                            }}
-                        >
-                            <Trash2 size={16} color="#ef4444" />
-                            <span style={{ fontSize: 13, fontWeight: 700, color: '#ef4444', fontFamily: "'Montserrat', sans-serif" }}>
-                                DELETE GROUP
-                            </span>
-                        </motion.div>
-                    )}
-                </div>
-            </div>
-        </BottomSheet>
-    );
+    const candidates = allFriends.filter(person=>!members.some(member=>member.id===person.id) && person.name.toLowerCase().includes(search.toLowerCase()));
+    const run = async action => { if(busy)return;setBusy(true);setError('');try{await action();}catch(err){setError(err.message || 'Could not save this change.');}finally{setBusy(false);} };
+    return <BottomSheet isOpen={isOpen} onClose={onClose} title="Group settings">
+        <div className="settings-form">
+            <div className="panel-intro"><span className="panel-icon"><Users size={22}/></span><div><h3>Your group, together</h3><p>Update the details and manage your people.</p></div></div>
+            <label className="panel-field"><span>Group name</span><input value={name} onChange={event=>setName(event.target.value)} placeholder="e.g. Pokhara weekend" maxLength={100}/></label>
+            <details className="group-icon-disclosure"><summary>Group icon <span>{icon}</span></summary><div className="group-icon-picker">{GROUP_ICONS.map(value=><button key={value} aria-label={`Group icon ${value}`} aria-pressed={icon===value} onClick={()=>setIcon(value)}>{value}</button>)}</div></details>
+            <button className="button-primary" disabled={busy || !name.trim()} onClick={()=>run(async()=>{await onSave(group.id,{name:name.trim(),icon});onClose();})}>{busy?'Saving…':'Save changes'}</button>
+            <div className="panel-section-title"><h3>Members</h3><span>{members.length} people</span></div>
+            <div className="settings-members">{members.map(person=><div key={person.id}><Avatar initials={person.initials} size={36}/><span>{person.id===user.id?'You':person.name}</span>{person.id!==user.id && <button className="member-remove" aria-label={`Remove ${person.name}`} disabled={busy} onClick={()=>run(()=>onRemoveMember(group.id,person.id))}><UserMinus size={17}/></button>}</div>)}</div>
+            <div className="panel-section-title"><h3>Add people</h3></div>
+            <div className="search-field"><Search size={17}/><input aria-label="Find friends to add" value={search} onChange={event=>setSearch(event.target.value)} placeholder="Search your friends"/></div>
+            <div className="settings-candidates">{candidates.map(person=><button key={person.id} disabled={busy} onClick={()=>run(()=>onAddMember(group.id,person.id))}><Avatar initials={person.initials} size={32}/><span>{person.name}</span><Plus size={17}/></button>)}{!candidates.length && <p className="field-help">{search?'No matching friends.':'All your friends are already here. Add a new friend from the Friends tab.'}</p>}</div>
+            {error && <p className="form-error" role="alert">{error}</p>}
+            {onDeleteGroup && <div className="archive-section"><div><strong>Archive group</strong><p>Keep the history, finish the shared tab.</p></div><button className="button-secondary" disabled={busy} onClick={()=>{if(window.confirm('Archive this group? Its bills and activity will be preserved.'))run(()=>onDeleteGroup(group.id));}}><Trash2 size={16}/>Archive</button></div>}
+        </div>
+    </BottomSheet>;
 }
 
 function FilterSheet({ isOpen, onClose, filter, setFilter }) {
     const options = [
-        {
-            id: 'all',
-            label: 'Everyone',
-            sub: 'View all active social circles',
-            icon: <Users size={18} />,
-            color: '#202020'
-        },
-        {
-            id: 'owes_me',
-            label: 'Owes me',
-            sub: 'Friends who need to pay you',
-            icon: <TrendingUp size={18} />,
-            color: '#059669' // Emerald
-        },
-        {
-            id: 'i_owe',
-            label: 'I owe',
-            sub: 'Expenses you need to clear',
-            icon: <TrendingDown size={18} />,
-            color: '#EF4444' // Rose
-        },
-        {
-            id: 'settled',
-            label: 'Settled',
-            sub: 'See your completed history',
-            icon: <CheckCircle2 size={18} />,
-            color: 'var(--text-3)'
-        }
+        {id:'all',label:'All balances',description:'Everyone, including settled balances',Icon:Users},
+        {id:'owes_me',label:'You’re owed',description:'Balances in your favour',Icon:ArrowDownLeft},
+        {id:'i_owe',label:'You owe',description:'Balances you need to settle',Icon:ArrowUpRight},
+        {id:'settled',label:'Settled up',description:'Nothing left to pay',Icon:CheckCircle2},
     ];
-
-    return (
-        <BottomSheet isOpen={isOpen} onClose={onClose} title="Filter By">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 16 }}>
-
-                {options.map((opt) => {
-                    const isActive = filter === opt.id;
-
-                    return (
-                        <motion.div
-                            key={opt.id}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={() => { setFilter(opt.id); onClose(); }}
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 16,
-                                padding: '16px 20px',
-                                // ─── DYNAMIC STYLING ───
-                                background: '#ffffff',
-                                borderRadius: 20,
-                                cursor: 'pointer',
-                                border: `1px solid ${isActive ? '#202020' : '#e5e7eb'}`,
-                                boxShadow: isActive ? '0 8px 20px rgba(0,0,0,0.06)' : 'none',
-                                transition: 'all 0.2s ease',
-                                position: 'relative',
-                                overflow: 'hidden'
-                            }}
-                        >
-                            <div style={{
-                                width: 42,
-                                height: 42,
-                                borderRadius: 12,
-                                background: isActive ? `${opt.color}10` : '#f8f9fa',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                color: isActive ? opt.color : 'var(--text-3)',
-                                transition: 'all 0.2s'
-                            }}>
-                                {opt.icon}
-                            </div>
-
-                            <div style={{ flex: 1 }}>
-                                <div style={{
-                                    fontSize: 15,
-                                    fontWeight: 800,
-                                    color: '#202020',
-                                    fontFamily: "'Montserrat', sans-serif",
-                                    letterSpacing: '-0.3px'
-                                }}>
-                                    {opt.label}
-                                </div>
-                                <div style={{
-                                    fontSize: 11,
-                                    color: 'var(--text-3)',
-                                    fontWeight: 500,
-                                    marginTop: 2
-                                }}>
-                                    {opt.sub}
-                                </div>
-                            </div>
-
-                            <div style={{ width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                {isActive && (
-                                    <motion.div
-                                        initial={{ scale: 0 }}
-                                        animate={{ scale: 1 }}
-                                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                                    >
-                                        <div style={{
-                                            width: 22,
-                                            height: 22,
-                                            borderRadius: '50%',
-                                            background: '#202020',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center'
-                                        }}>
-                                            <Check size={12} color="#c9f158" strokeWidth={4} />
-                                        </div>
-                                    </motion.div>
-                                )}
-                            </div>
-                        </motion.div>
-                    );
-                })}
-            </div>
-        </BottomSheet>
-    );
+    return <BottomSheet isOpen={isOpen} onClose={onClose} title="Filter balances"><p className="field-help">Choose which friends and groups appear in your circle.</p><div className="balance-filter-options" role="group" aria-label="Balance filter">{options.map(({id,label,description,Icon})=><button type="button" key={id} aria-pressed={filter===id} onClick={()=>{setFilter(id);onClose();}}><span className="balance-filter-icon"><Icon size={21}/></span><span><strong>{label}</strong><small>{description}</small></span><span className="filter-radio">{filter===id&&<Check size={13}/>}</span></button>)}</div></BottomSheet>;
 }
 
 function ListSkeleton() {
@@ -1533,18 +660,20 @@ function FriendDetail({ friend, allFriends, onBack, onRemoveFriend, onRefresh })
     const [showSettle, setShowSettle] = useState(false);
     const [showAddExp, setShowAddExp] = useState(false);
     const [editingExp, setEditingExp] = useState(null);
-    const [showSettled, setShowSettled] = useState(false);
+    const [showSettled, setShowSettled] = useState(true);
 
     useEffect(() => {
         const load = async () => {
-            setLoading(true);
+            setLoading(activeFriendContext.details?.id !== friend.id);
             await syncFriendDetail(friend.id);
             setLoading(false);
         };
         load();
     }, [friend.id]);
 
-    const { expenses, balance: syncedBalance } = activeFriendContext;
+    const matchesFriend = activeFriendContext.details?.id === friend.id;
+    const expenses = matchesFriend ? activeFriendContext.expenses : [];
+    const syncedBalance = matchesFriend ? activeFriendContext.balance : friend.balance;
 
     const currentBalance = parseFloat(syncedBalance || 0);
     const settledExpenses = (expenses || []).filter(e => e.isPaid);
@@ -1559,36 +688,25 @@ function FriendDetail({ friend, allFriends, onBack, onRemoveFriend, onRefresh })
 
             return {
                 ...e,
-                paidByName: isMe ? 'You' : friend.name,
+                paidByName: isMe ? 'You' : e.paidByName || friend.name,
                 displayTitle: e.type === 'payment'
-                    ? (isMe ? `You paid ${friend.name}` : `${friend.name} paid You`)
+                    ? `${isMe ? 'You' : e.paidByName || friend.name} paid ${e.paidToName || friend.name}`
                     : e.desc,
                 isSettlement: e.type === 'payment'
             };
         });
     }, [visibleExpenses, friend.name, user?.id]);
 
-    const handleSettle = async (amount, shouldLog) => {
+    const handleSettle = async (amount, shouldLog, payerId) => {
+        await settleFriend(friend.id, amount, friend.name, shouldLog, payerId);
+        await syncFriendDetail(friend.id);
         setShowSettle(false);
-        try {
-            await settleFriend(friend.id, amount, friend.name, shouldLog);
-            await syncFriendDetail(friend.id);
-        } catch (e) {
-            toast.error(e.message || "Settlement failed");
-        }
     };
 
     const handleDelete = async (item) => {
-        try {
-            if (item.type === 'payment' || item.isSettlement) {
-                await deleteSocialPayment(item.id);
-            } else {
-                await deleteSocialExpense(item.id);
-            }
-            await syncFriendDetail(friend.id);
-        } catch (e) {
-            toast.error(e.message || "Delete failed");
-        }
+        if (item.type === 'payment' || item.isSettlement) await deleteSocialPayment(item.id);
+        else await deleteSocialExpense(item.id);
+        await syncFriendDetail(friend.id);
     };
 
     return (
@@ -1597,7 +715,7 @@ function FriendDetail({ friend, allFriends, onBack, onRemoveFriend, onRefresh })
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 padding: '16px 20px', background: 'transparent'
             }}>
-                <div onClick={onBack} style={{ padding: 8, cursor: 'pointer' }}><ChevronLeft size={25} /></div>
+                <button className="back-button" aria-label="Back to Friends" onClick={onBack}><ChevronLeft size={25}/></button>
                 <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Montserrat', sans-serif" }}>
                         {friend.name}
@@ -1630,18 +748,18 @@ function FriendDetail({ friend, allFriends, onBack, onRemoveFriend, onRefresh })
                                 color: Math.abs(currentBalance) < 0.01 ? '#202020' : currentBalance > 0 ? '#c9f158' : '#ef4444',
                                 fontFamily: "'Montserrat', sans-serif", letterSpacing: '-1px'
                             }}>
-                                {Math.abs(currentBalance) < 0.01 ? 'Settled.' : `₹${fmt(Math.abs(currentBalance))}`}
+                                {Math.abs(currentBalance) < 0.01 ? 'Settled.' : `Rs. ${fmt(Math.abs(currentBalance))}`}
                             </div>
                         </div>
 
-                        {Math.abs(currentBalance) > 0.01 && (
+                        {(
                             <motion.button
                                 whileTap={{ scale: 0.95 }}
                                 onClick={() => setShowSettle(true)}
                                 style={{
                                     background: '#202020', color: '#ffffff', border: 'none',
                                     borderRadius: 12, padding: '8px 12px', fontSize: 12,
-                                    fontWeight: 900, cursor: 'pointer', boxShadow: '0 8px 20px rgba(0,0,0,0.1)'
+                                    fontWeight: 600, cursor: 'pointer', boxShadow: '0 8px 20px rgba(0,0,0,0.1)'
                                 }}
                             >
                                 Settle
@@ -1678,6 +796,7 @@ function FriendDetail({ friend, allFriends, onBack, onRemoveFriend, onRefresh })
                     <ListSkeleton />
                 ) : (
                     <ExpenseList
+                        user={user}
                         expenses={enrichedExpenses}
                         onDelete={(id) => {
                             const item = enrichedExpenses.find(e => e.id === id);
@@ -1707,7 +826,7 @@ function FriendDetail({ friend, allFriends, onBack, onRemoveFriend, onRefresh })
                 </motion.div>
             </div>
 
-            <SettleSheet isOpen={showSettle} onClose={() => setShowSettle(false)} name={friend.name} totalOwed={currentBalance} onConfirm={handleSettle} />
+            <SettleSheet isOpen={showSettle} onClose={() => setShowSettle(false)} name={friend.name} friendId={friend.id} totalOwed={currentBalance} onConfirm={handleSettle} />
             <ExpenseSheet
                 isOpen={showAddExp}
                 onClose={() => setShowAddExp(false)}
@@ -1736,6 +855,9 @@ function GroupDetail({ group: initialGroup, allFriends = [], onBack, onRefresh }
     const { user, deleteSocialExpense, deleteSocialPayment, settleGroup, activeGroupContext, syncGroupDetail, deleteGroup, updateGroupSettings, addGroupMember, removeGroupMember } = useApp();
     const [showAddExp, setShowAddExp] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
+    const [showTotals,setShowTotals]=useState(false);
+    const [showSettle,setShowSettle]=useState(false);
+    const [loadError,setLoadError]=useState('');
     const [editingExp, setEditingExp] = useState(null);
     const [settlingMember, setSettlingMember] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -1743,13 +865,14 @@ function GroupDetail({ group: initialGroup, allFriends = [], onBack, onRefresh }
     useEffect(() => {
         const load = async () => {
             setLoading(true);
-            await syncGroupDetail(initialGroup.id);
+            const loaded=await syncGroupDetail(initialGroup.id);
+            setLoadError(loaded ? '' : 'Could not load this group. Please retry.');
             setLoading(false);
         };
         load();
     }, [initialGroup.id]);
 
-    const { metadata, expenses, balances } = activeGroupContext;
+    const { metadata, expenses = [], balances = [], totals: groupTotals } = activeGroupContext.metadata?.id === initialGroup.id ? activeGroupContext : {};
 
     const currentGroup = metadata || initialGroup;
     const groupBalance = parseFloat(currentGroup.balance || 0);
@@ -1761,10 +884,10 @@ function GroupDetail({ group: initialGroup, allFriends = [], onBack, onRefresh }
                 ...b,
                 net: netValue,
                 absNet: Math.abs(netValue),
-                isTheyOweMe: netValue > 0.01,
-                isIOweThem: netValue < -0.01
+                isTheyOweMe: netValue >= 0.01,
+                isIOweThem: netValue <= -0.01
             };
-        }).filter(b => Math.abs(b.net) > 0.01);
+        }).filter(b => Math.abs(b.net) >= 0.01);
     }, [balances]);
 
     const enrichedExpenses = useMemo(() => {
@@ -1795,13 +918,13 @@ function GroupDetail({ group: initialGroup, allFriends = [], onBack, onRefresh }
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 padding: '16px 20px', background: 'transparent'
             }}>
-                <div onClick={onBack} style={{ padding: 8, cursor: 'pointer' }}><ChevronLeft size={25} /></div>
+                <button className="back-button" aria-label="Back to Friends" onClick={onBack}><ChevronLeft size={25}/></button>
                 <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: 20, fontWeight: 800, fontFamily: "'Montserrat', sans-serif" }}>
                         {currentGroup.icon} {currentGroup.name}
                     </div>
                 </div>
-                <div
+                <button aria-label="Group settings"
                     onClick={() => setShowSettings(true)}
                     style={{
                         display: 'flex',
@@ -1816,7 +939,7 @@ function GroupDetail({ group: initialGroup, allFriends = [], onBack, onRefresh }
                     }}
                 >
                     <Settings size={24} strokeWidth={2} />
-                </div>
+                </button>
             </div>
 
             <div style={{ padding: '0 16px', paddingBottom: 110 }}>
@@ -1838,42 +961,12 @@ function GroupDetail({ group: initialGroup, allFriends = [], onBack, onRefresh }
                         </div>
                         <div style={{
                             fontSize: 34, fontWeight: 800,
-                            color: groupBalance === 0 ? '#202020' : groupBalance > 0 ? '#c9f158' : '#ef4444',
+                            color: groupBalance === 0 ? '#202020' : groupBalance > 0 ? '#507418' : '#ef4444',
                             fontFamily: "'Montserrat', sans-serif", letterSpacing: '-1px'
                         }}>
-                            {groupBalance === 0 ? 'Settled.' : (groupBalance > 0 ? `+₹${fmt(groupBalance)}` : `-₹${fmt(Math.abs(groupBalance))}`)}
+                            {groupBalance === 0 ? 'Settled.' : (groupBalance > 0 ? `+Rs. ${fmt(groupBalance)}` : `-Rs. ${fmt(Math.abs(groupBalance))}`)}
                         </div>
                     </div>
-
-                    {enrichedBalances.length > 0 && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
-                            {enrichedBalances.map(b => (
-                                <div key={b.id} style={{
-                                    display: 'flex', alignItems: 'center', gap: 12,
-                                    background: '#f2f3f527', borderRadius: 20, padding: '14px 16px',
-                                    border: '1px solid #f0f0f0'
-                                }}>
-                                    <Avatar initials={b.initials} size={42} />
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ fontSize: 14, fontWeight: 700, color: '#202020' }}>{b.name}</div>
-                                        <div style={{ fontSize: 12, fontWeight: 500, color: b.isTheyOweMe ? '#c9f158' : '#EF4444' }}>
-                                            {b.isTheyOweMe ? `owes you ₹${fmt(b.absNet)}` : `you owe ₹${fmt(b.absNet)}`}
-                                        </div>
-                                    </div>
-                                    <button
-                                        onClick={() => setSettlingMember(b)}
-                                        style={{
-                                            background: '#202020', color: '#fff', border: 'none',
-                                            borderRadius: 10, padding: '6px 12px', fontSize: 11,
-                                            fontWeight: 800, cursor: 'pointer'
-                                        }}
-                                    >
-                                        Settle
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                    )}
 
                     <motion.button
                         whileTap={{ scale: 0.97 }}
@@ -1892,21 +985,26 @@ function GroupDetail({ group: initialGroup, allFriends = [], onBack, onRefresh }
                     </motion.button>
                 </motion.div>
 
+                <div className="group-detail-actions"><button className="button-secondary" style={{fontWeight:600}} disabled={loading || !!loadError} onClick={()=>setShowSettle(true)}><Wallet size={18}/>Settle up</button><button className="button-secondary" disabled={loading || !!loadError} onClick={()=>setShowTotals(true)}><ChartNoAxesCombined size={18}/>View totals</button></div>
+                {loadError && <div role="alert" className="form-error">{loadError}<button className="button-secondary" onClick={async()=>{setLoading(true);const data=await syncGroupDetail(initialGroup.id);setLoadError(data?'':'Could not load this group. Please retry.');setLoading(false);}}>Retry</button></div>}
+                <BottomSheet isOpen={showTotals} onClose={()=>setShowTotals(false)} title="Group totals"><GroupTotals totals={groupTotals} groupId={currentGroup.id} userId={user.id}/></BottomSheet>
+                <SettleSheet isOpen={showSettle} onClose={()=>setShowSettle(false)} members={currentGroup.members} onConfirm={async(amount,shouldLog,payerId,receiverId)=>{
+                    await settleGroup(currentGroup.id,receiverId,amount,'',false,shouldLog,payerId,receiverId);
+                    await syncGroupDetail(currentGroup.id);
+                    setShowSettle(false);
+                }}/>
+
                 {loading ? (
                     <ListSkeleton />
                 ) : (
                     <ExpenseList
+                        user={user}
                         expenses={enrichedExpenses}
                         onDelete={async (id) => {
                             const item = enrichedExpenses.find(e => e.id === id);
-                            try {
-                                if (item.isSettlement || item.type === 'payment') {
-                                    await deleteSocialPayment(id);
-                                } else {
-                                    await deleteSocialExpense(id);
-                                }
-                                await syncGroupDetail(currentGroup.id);
-                            } catch (e) { toast.error("Delete failed"); }
+                            if (item.isSettlement || item.type === 'payment') await deleteSocialPayment(id);
+                            else await deleteSocialExpense(id);
+                            await syncGroupDetail(currentGroup.id);
                         }}
                         onEdit={setEditingExp}
                         emptyTip="No group activity yet."
@@ -1930,13 +1028,12 @@ function GroupDetail({ group: initialGroup, allFriends = [], onBack, onRefresh }
                     isOpen={!!settlingMember}
                     onClose={() => setSettlingMember(null)}
                     name={settlingMember.name}
+                    friendId={settlingMember.id}
                     totalOwed={settlingMember.net}
-                    onConfirm={async (amount, shouldLog) => {
+                    onConfirm={async (amount, shouldLog, payerId, receiverId) => {
+                        await settleGroup(currentGroup.id, settlingMember.id, amount, settlingMember.name, settlingMember.net<0,shouldLog,payerId,receiverId);
+                        await syncGroupDetail(currentGroup.id);
                         setSettlingMember(null);
-                        try {
-                            await settleGroup(currentGroup.id, settlingMember.id, amount, settlingMember.name, settlingMember.net<0,shouldLog);
-                            await syncGroupDetail(currentGroup.id);
-                        } catch (e) { toast.error('Settlement failed'); }
                     }}
                 />
             )}
@@ -1966,7 +1063,7 @@ function GroupDetail({ group: initialGroup, allFriends = [], onBack, onRefresh }
 }
 
 export default function Friends() {
-    const { friends, groups, refreshSocial, removeFriend } = useApp();
+    const { friends, groups, socialSummary, refreshSocial, removeFriend } = useApp();
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
@@ -1996,150 +1093,45 @@ export default function Friends() {
 
             if (!isSearchMatch) return false;
 
-            if (filter === 'owes_me') return bal > 0.01;
-            if (filter === 'i_owe') return bal < -0.01;
-            if (filter === 'settled') return Math.abs(bal) <= 0.01;
-            return Math.abs(bal) > 0.01;
+            if (filter === 'owes_me') return bal >= 0.01;
+            if (filter === 'i_owe') return bal <= -0.01;
+            if (filter === 'settled') return Math.abs(bal) < 0.01;
+            return Math.abs(bal) >= 0.01;
         });
     }, [friends, filter, searchQuery]);
 
     const visibleGroups = useMemo(() => {
-        return (groups || []).filter(g =>
-            g.name.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-    }, [groups, searchQuery]);
+        return (groups || []).filter(g => {
+            if (!g.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+            const balance = Number(g.balance || 0);
+            return filter === 'owes_me' ? balance >= .01 : filter === 'i_owe' ? balance <= -.01 : filter === 'settled' ? Math.abs(balance) < .01 : true;
+        });
+    }, [groups, searchQuery, filter]);
 
-    const settledFriends = friends.filter(f => f.balance === 0);
-    const totalOwed = friends.filter(f => f.balance > 0).reduce((s, f) => s + f.balance, 0);
-    const totalOwe = friends.filter(f => f.balance < 0).reduce((s, f) => s + Math.abs(f.balance), 0);
+    const settledFriends = friends.filter(f => Math.abs(Number(f.balance || 0)) < .01 && f.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    const totalOwed = socialSummary?.owed ?? friends.filter(f => f.balance > 0).reduce((s, f) => s + f.balance, 0);
+    const totalOwe = socialSummary?.owing ?? friends.filter(f => f.balance < 0).reduce((s, f) => s + Math.abs(f.balance), 0);
 
     if (activeFriend) return <FriendDetail friend={activeFriend} allFriends={friends} onBack={() => setActiveFriend(null)} onRemoveFriend={removeFriend} onRefresh={onRefresh} />;
     if (activeGroup) return <GroupDetail group={activeGroup} allFriends={friends} onBack={() => setActiveGroup(null)} onRefresh={onRefresh} />;
 
     return (
         <>
-            {/* Top bar */}
-            <div className="top-bar">
-                <div className="icon-btn" onClick={() => tab === 'friends' ? setShowAddFriend(true) : setShowCreateGroup(true)}>{tab === 'friends' ? <UserPlus size={30} /> : <Users size={30} />}</div>
-                <div style={{ flex: 1, textAlign: 'center' }}>
-                    <div className="greeting" style={{ fontSize: 20 }}>Split With Friends</div>
-                </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-
-                    <div className="icon-btn" onClick={() => setShowFilter(true)} style={{ position: 'relative' }}>
-                        <SlidersHorizontal size={30} />
-                        {filter !== 'all' && <div style={{ position: 'absolute', top: 6, right: 6, width: 6, height: 6, borderRadius: '50%', background: '#c9f158' }} />}
-                    </div>
-                </div>
-            </div>
+            <PageHeader title="Friends" subtitle="Shared plans. Clear balances." actions={<button className="button-secondary" aria-label="Filter balances" onClick={() => setShowFilter(true)}><SlidersHorizontal size={18}/><span>{({all:'Filter',owes_me:'You’re owed',i_owe:'You owe',settled:'Settled'})[filter]}</span>{filter !== 'all' && <i className="filter-active-dot"/>}</button>}/>
 
             <div style={{ padding: '0 16px', paddingBottom: 100 }}>
 
-                <motion.div
-                    {...fadeUp}
-                    style={{
-                        background: '#ffffff',
-                        borderRadius: 28,
-                        padding: '24px',
-                        marginTop: 10,
-                        marginBottom: 24,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 20,
-                        position: 'relative',
-                        overflow: 'hidden',
-                        border: '1px solid #e5e7eb',
-                        boxShadow: '0 12px 30px rgba(0,0,0,0.04)'
-                    }}
-                >
-                    <div style={{
-                        position: 'absolute',
-                        right: -10,
-                        top: 0,
-                        opacity: 0.2,
-                        color: '#c9f158',
-                        pointerEvents: 'none',
-                        transform: 'rotate(15deg)'
-                    }}>
-                        <Wallet size={100} strokeWidth={1} />
+                <section className="social-hero">
+                    <div className="social-net-label">{totalOwed === totalOwe ? 'All balanced' : totalOwed > totalOwe ? 'Overall, you’re owed' : 'Overall, you owe'}</div>
+                    <div className={`social-net ${totalOwed < totalOwe ? 'balance-owing' : totalOwed > totalOwe ? 'balance-owed' : 'balance-even'}`}>Rs. {fmt(Math.abs(totalOwed - totalOwe))}<span>Rupees</span></div>
+                    <div className="social-balance-grid">
+                        <div><span>You’re owed</span><strong>Rs. {fmt(totalOwed)}</strong></div>
+                        <div><span>You owe</span><strong className="owing-on-dark">Rs. {fmt(totalOwe)}</strong></div>
                     </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', position: 'relative', zIndex: 1 }}>
-                        {totalOwed === 0 && totalOwe === 0 ? (
-                            <div style={{ flex: 1, textAlign: 'center', padding: '10px 0' }}>
-                                <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '1.2px', marginBottom: 4 }}>
-                                    Current Status
-                                </div>
-                                <div style={{ fontSize: 24, fontWeight: 800, color: '#202020', fontFamily: "'Montserrat', sans-serif" }}>
-                                    You're all settled.
-                                </div>
-                            </div>
-                        ) : (
-
-                            <>
-                                {totalOwed > 0 && (
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#c9f158' }} />
-                                            <div style={{ fontSize: 10, fontWeight: 800, color: 'rgba(32, 32, 32, 0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                                                You're owed
-                                            </div>
-                                        </div>
-                                        <div style={{ fontSize: 28, fontWeight: 900, color: '#c9f158', fontFamily: "'Montserrat', sans-serif", letterSpacing: '-1px' }}>
-                                            ₹{fmt(totalOwed)}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {totalOwed > 0 && totalOwe > 0 && (
-                                    <div style={{ width: '1px', background: '#e5e7eb', margin: '0 16px', height: '32px' }} />
-                                )}
-
-                                {totalOwe > 0 && (
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444' }} />
-                                            <div style={{ fontSize: 10, fontWeight: 800, color: 'rgba(32, 32, 32, 0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                                                You owe
-                                            </div>
-                                        </div>
-                                        <div style={{ fontSize: 28, fontWeight: 900, color: '#ef4444', fontFamily: "'Montserrat', sans-serif", letterSpacing: '-1px' }}>
-                                            ₹{fmt(totalOwe)}
-                                        </div>
-                                    </div>
-                                )}
-                            </>
-                        )}
-                    </div>
-
-                    <motion.button
-                        whileTap={{ scale: 0.97 }}
-                        onClick={() => setShowAddExpense(true)}
-                        style={{
-                            width: '100%',
-                            height: 55,
-                            background: '#202020',
-                            color: '#ffffff',
-                            borderRadius: 32,
-                            border: 'none',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 10,
-                            cursor: 'pointer',
-                            position: 'relative',
-                            zIndex: 2,
-                            boxShadow: '0 8px 20px rgba(0,0,0,0.15)'
-                        }}
-                    >
-                        <div style={{ position: 'relative' }}>
-                            <Plus size={18} strokeWidth={3} color="#c9f158" />
-                        </div>
-                        <span style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Montserrat', sans-serif", letterSpacing: '0.2px' }}>
-                            Add Expense
-                        </span>
-                    </motion.button>
-                </motion.div>
+                    <button className="social-primary" onClick={() => setShowAddExpense(true)}><Plus size={19} /> Add an expense</button>
+                </section>
+                <div className="circle-actions"><button className="circle-action" onClick={() => setShowAddFriend(true)}><UserPlus size={22}/><span><strong>Add friend</strong><small>Find them by phone number</small></span></button><button className="circle-action" onClick={() => setShowCreateGroup(true)}><Users size={22}/><span><strong>Create group</strong><small>A trip, a home, or a shared plan</small></span></button></div>
+                <div className="social-section-heading"><h2>Your circle</h2><span>{friends.length} {friends.length === 1 ? 'friend' : 'friends'} · {groups.length} {groups.length === 1 ? 'group' : 'groups'}</span></div>
 
                 {/* Tabs */}
                 <div style={{
@@ -2212,6 +1204,7 @@ export default function Friends() {
                     })}
                 </div>
 
+                <p className="circle-help">{tab === 'groups' ? 'Keep every bill for a trip or shared home together. Create a group, choose your friends, and start splitting.' : 'Add friends using the number they saved on Blip. Open a friend to see your shared bills and settle up.'}</p>
                 {/* Search bar */}
                 <div style={{
                     display: 'flex',
@@ -2235,7 +1228,7 @@ export default function Friends() {
                     <input
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
-                        placeholder={tab === 'friends' ? "Search friends?" : "Search groups?"}
+                        placeholder={tab === 'friends' ? "Search your friends" : "Search your groups"}
                         onFocus={() => setIsFocused(true)}
                         onBlur={() => setIsFocused(false)}
                         style={{
@@ -2266,7 +1259,7 @@ export default function Friends() {
                     {tab === 'friends' && (
                         <motion.div key="friends" {...fadeIn}>
                             {visibleFriends.length === 0 && !searchQuery ? (
-                                <ProTip text="Your circle is quiet. Invite a friend to split that dinner? Add friends to get started." />
+                                <ProTip text={filter !== 'all' ? "No friends match this balance filter. Try another filter to see your circle." : friends.length ? "You’re all settled up. Your friends are listed below." : "Add your first friend using their phone number to start splitting bills."} />
                             ) : visibleFriends.length === 0 ? (
                                 <div style={{ textAlign: 'center', padding: '32px 20px', color: 'var(--text-3)', fontSize: 13, fontWeight: 500 }}>No friends match your search.</div>
                             ) : (
@@ -2324,7 +1317,7 @@ export default function Friends() {
                     {tab === 'groups' && (
                         <motion.div key="groups" {...fadeIn}>
                             {visibleGroups.length === 0 ? (
-                                <ProTip text="No groups yet. Create one for your next trip or flat expenses." />
+                                <ProTip text={groups.length ? "No groups match your search or balance filter. Try another filter or clear your search." : "No groups yet. Create one for your next trip or shared home."} />
                             ) : (
                                 <motion.div
                                     variants={stagger}
@@ -2334,7 +1327,7 @@ export default function Friends() {
                                 >
                                     {visibleGroups.map(g => {
                                         const groupBalance = parseFloat(g.balance || 0);
-                                        const isSettled = Math.abs(groupBalance) <= 0.01;
+                                        const isSettled = Math.abs(groupBalance) < 0.01;
 
                                         return (
                                             <motion.div
@@ -2405,14 +1398,14 @@ export default function Friends() {
                                                         <div style={{
                                                             fontSize: 11,
                                                             fontWeight: 700,
-                                                            color: '#ffffff',
+                                                            color: '#202020',
                                                             fontFamily: "'Montserrat', sans-serif",
                                                             letterSpacing: '-0.3px',
                                                             padding: '4px 8px',
                                                             borderRadius: '12px',
                                                             background: '#c8f158c2',
                                                         }}>
-                                                            ₹{(g.totalSpent || 0).toLocaleString('en-IN')}
+                                                            Rs. {(g.totalSpent || 0).toLocaleString('en-IN')}
                                                         </div>
                                                     </div>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

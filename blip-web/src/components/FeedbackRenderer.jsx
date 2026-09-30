@@ -10,7 +10,7 @@ export default function FeedbackRenderer() {
 
     return (
         <>
-            {/* Full-screen money flow — expense added / income added */}
+            {/* Brief confirmation after a successful save */}
             <MoneyFlowOverlay
                 active={flowAnim.show}
                 type={flowAnim.type}
@@ -18,7 +18,7 @@ export default function FeedbackRenderer() {
                 onComplete={dismissFlow}
             />
 
-            {/* Full-screen celebration — recurring paid / investment added / shopping bought */}
+            {/* Confirmation for recurring payments and other saved entries */}
             <CelebrationOverlay
                 show={celebration.show}
                 type={celebration.type}

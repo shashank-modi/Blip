@@ -104,7 +104,7 @@ export default function Recurring() {
                                 </div>
 
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
-                                    <span style={{ fontWeight: '600', fontSize: '1.1rem' }}>₹{Number(sub.amount).toLocaleString()}</span>
+                                    <span style={{ fontWeight: '600', fontSize: '1.1rem' }}>Rs. {Number(sub.amount).toLocaleString()}</span>
                                     {isPending ? (
                                         <button
                                             onClick={(e) => handlePay(sub.id, e)}
@@ -136,7 +136,7 @@ export default function Recurring() {
                         <input className="form-input" value={editTitle} onChange={e => setEditTitle(e.target.value)} />
                     </div>
                     <div className="form-field">
-                        <div className="form-label">Amount (₹)</div>
+                        <div className="form-label">Amount (Rs. )</div>
                         <input className="form-input" type="number" value={editAmt} onChange={e => setEditAmt(e.target.value)} />
                     </div>
                     <div className="form-field">

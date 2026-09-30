@@ -2,6 +2,7 @@ import express from 'express';
 import { requireAuth, getUserId} from '../middleware/auth.js';
 import { pool } from '../db/client.js';
 
+import { cents } from '../utils/money.js';
 const router = express.Router();
 router.use(requireAuth);
 
@@ -15,7 +16,7 @@ router.post('/', async (req, res, next) => {
             return res.status(400).json({ error: 'A positive amount is required' });
         }
 
-        const parsedAmount = parseFloat(amount);
+        const parsedAmount = cents(amount) / 100;
         client = await pool.connect();
         await client.query('BEGIN');
 

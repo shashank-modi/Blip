@@ -1,3 +1,7 @@
+import PageHeader from '../components/PageHeader';
+import DateField from '../components/DateField';
+import { localDate } from '../utils/splits';
+import { History } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
 import SwipeableItem from '../components/SwipeableItem';
@@ -23,7 +27,7 @@ const parseExpenseInput = (input) => {
 
 export default function Home() {
     const {
-        user, expenses, updateUserBudget,
+        user, expenses, monthlyExpenses, activeMonth, updateUserBudget, claimMonthlyBudgetPrompt,
         addExpenseNLP, recurring, markRecurringPaid,
         deleteRecurring, updateRecurringItem,
         addRecurring, setCurrentScreen,
@@ -39,6 +43,8 @@ export default function Home() {
     const [selectedCat, setSelectedCat] = useState('');
     const [isPromptMonthOpen, setIsPromptMonthOpen] = useState(false);
     const [promptBudget, setPromptBudget] = useState('');
+    const [budgetSaving, setBudgetSaving] = useState(false);
+    const [budgetError, setBudgetError] = useState('');
     const [isSheetOpen, setIsSheetOpen] = useState(false);
     const [isIncomeOpen, setIsIncomeOpen] = useState(false);
     const [incomeAmt, setIncomeAmt] = useState('');
@@ -60,13 +66,14 @@ export default function Home() {
     const [isCatSheetOpen, setIsCatSheetOpen] = useState(false);
     const [customCatInput, setCustomCatInput] = useState('');
 
-    const [recInput, setRecInput] = useState('');
+    const [recName,setRecName] = useState('');
+    const [recAmount,setRecAmount] = useState('');
+    const [savingSchedule,setSavingSchedule] = useState(false);
     const [recCat, setRecCat] = useState('');
     const [recDate, setRecDate] = useState('1');
     const [recParseError, setRecParseError] = useState('');
 
     const mainPreview = parseExpenseInput(nlpInput);
-    const sheetPreview = parseExpenseInput(recInput);
 
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [isDateSheetOpen, setIsDateSheetOpen] = useState(false);
@@ -81,27 +88,27 @@ export default function Home() {
     const isOverAverage = spent > expectedSpentByToday;
 
     useEffect(() => {
-        const monthKey = `blip_budget_prompt_${nowLocal.getFullYear()}_${nowLocal.getMonth() + 1}`;
-        if (!localStorage.getItem(monthKey) && user && user.budget > 0) {
-            setPromptBudget(user.budget.toString());
-            setIsPromptMonthOpen(true);
-        }
-    }, [user?.budget]);
+        if (!user.id) return;
+        claimMonthlyBudgetPrompt().then(show => {
+            if (show) { setPromptBudget(String(user.budget || 0)); setIsPromptMonthOpen(true); }
+        });
+    }, [user.id, activeMonth, claimMonthlyBudgetPrompt]);
 
-    const handleSaveMonthBudget = () => {
-        const monthKey = `blip_budget_prompt_${nowLocal.getFullYear()}_${nowLocal.getMonth() + 1}`;
-        localStorage.setItem(monthKey, 'done');
-        updateUserBudget(Number(promptBudget));
-        setIsPromptMonthOpen(false);
+    const handleSaveMonthBudget = async () => {
+        setBudgetSaving(true);setBudgetError('');
+        try {
+            if(await updateUserBudget(Number(promptBudget))) setIsPromptMonthOpen(false);
+            else setBudgetError('Could not save your budget. Please try again.');
+        } finally { setBudgetSaving(false); }
     };
 
     const remainingDisplay = remaining >= 0
-        ? `₹${Math.round(remaining).toLocaleString('en-IN')} left`
-        : `₹${Math.abs(Math.round(remaining)).toLocaleString('en-IN')} over`;
+        ? `Rs. ${Math.round(remaining).toLocaleString('en-IN')} left`
+        : `Rs. ${Math.abs(Math.round(remaining)).toLocaleString('en-IN')} over`;
     const remainingOver = remaining < 0;
 
     const recentExpenses = [...expenses].filter(e => e.category !== 'Income').slice(0, 4);
-    const topExpenses = [...expenses].filter(e => e.category !== 'Income').sort((a, b) => b.amount - a.amount).slice(0, 4);
+    const topExpenses = [...monthlyExpenses].filter(e => e.category !== 'Income').sort((a, b) => b.amount - a.amount).slice(0, 4);
     const unpaidRecurring = recurring.filter(r => !r.isPaid);
     const allPaid = recurring.length > 0 && unpaidRecurring.length === 0;
 
@@ -122,17 +129,27 @@ export default function Home() {
         setEditingRecurring(rec); // Opens the EditRecurringSheet
     };
 
-    const handleAddExpense = (e) => {
-        if (!nlpInput.trim()) return;
-        addExpenseNLP(nlpInput, selectedCat, selectedDate);
+    const [savingExpense,setSavingExpense] = useState(false);
+    const [savingIncome,setSavingIncome] = useState(false);
+    const handleAddExpense = async () => {
+        if (!nlpInput.trim() || savingExpense) return;
+        setSavingExpense(true);
+        let saved;
+        try { saved = await addExpenseNLP(nlpInput, selectedCat, selectedDate); }
+        finally { setSavingExpense(false); }
+        if (!saved) return;
         setNlpInput('');
         setSelectedCat('');
         setSelectedDate(new Date());
     };
 
-    const handleAddIncome = () => {
-        if (!incomeAmt) return;
-        addIncome(incomeAmt, incomeSource);
+    const handleAddIncome = async () => {
+        if (!incomeAmt || savingIncome) return;
+        setSavingIncome(true);
+        let saved;
+        try { saved = await addIncome(incomeAmt, incomeSource); }
+        finally { setSavingIncome(false); }
+        if (!saved) return;
         setIsIncomeOpen(false);
         setIncomeAmt('');
     };
@@ -155,15 +172,16 @@ export default function Home() {
         }, 350);
     };
 
-    const handleAddRecurring = () => {
-        const parsed = parseExpenseInput(recInput);
-        if (!parsed || !parsed.title.trim()) {
-            setRecParseError('Try "1200 rent"');
-            return;
-        }
-        addRecurring(parsed.title.trim(), parsed.amount, recCat || 'General', recDate);
-        setIsSheetOpen(false);
-        setRecInput('');
+    const handleAddRecurring = async () => {
+        const amount=Number(recAmount);
+        if(savingSchedule)return;
+        if(!recName.trim() || !Number.isFinite(amount) || amount<=0 || Math.abs(amount*100-Math.round(amount*100))>0.000001 || !Number.isInteger(Number(recDate)) || Number(recDate)<1 || Number(recDate)>31){setRecParseError('Enter a name, a valid amount, and a day from 1 to 31.');return;}
+        setSavingSchedule(true);setRecParseError('');
+        try {
+            const saved=await addRecurring(recName.trim(),amount,recCat || 'Bills',recDate);
+            if(saved){setIsSheetOpen(false);setRecName('');setRecAmount('');}
+            else setRecParseError('Could not schedule this payment. Please try again.');
+        } finally {setSavingSchedule(false);}
     };
 
     const handleAddShoppingItem = () => {
@@ -246,62 +264,30 @@ export default function Home() {
 
     return (
         <>
-            <div className="top-bar">
-                <div>
-                    <div className="greeting" style={{
-                        display: 'flex', alignItems: 'center', gap: 6,
-                        color: remainingOver || isOverAverage ? 'var(--danger)' : 'inherit',
-                        textShadow: isOverAverage && !remainingOver ? '0 0 12px rgba(239, 68, 68, 0.4)' : 'none',
-                        transition: 'all 0.3s'
-                    }}>
-                        {remainingOver ? <HeartCrack size={22} color="currentColor" /> : <span>Hi,</span>}
-                        <span>{user.name?.split(' ')[0]}</span>
-                    </div>
-                    {/* Live budget remaining chip */}
-                    <div id='tour-budget' style={{
-                        marginTop: 4,
-                        display: 'inline-flex', alignItems: 'center', gap: 6,
-                        background: '#f2f3f5',
-                        padding: '3px 10px', borderRadius: '7px',
-                        border: `1px solid ${remainingOver ? '#FECACA' : 'var(--indigo-mid)'}`,
-                    }}>
-                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: remainingOver ? 'var(--danger)' : '#202020', flexShrink: 0 }} />
-                        <span style={{ fontSize: 11, fontWeight: 600, color: remainingOver ? 'var(--danger)' : 'var(--indigo)' }}>
-                            {remainingDisplay} this {new Date().toLocaleString('en-US', { month: 'long' })}
-                        </span>
-                    </div>
-                </div>
-                <div className="top-bar-icons">
-                    <div id='tour-transaction-console' className="icon-btn" onClick={() => setCurrentScreen('logs')}>
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-                    </div>
-                    <div id='tour-dashboard' className="icon-btn" onClick={() => setCurrentScreen('dashboard')}>
-                        <LayoutDashboard size={24} />
-                    </div>
-                </div>
-            </div>
+            <PageHeader title="Wallet" subtitle={`Your personal spending, ${user.name?.split(' ')[0] || 'at a glance'}.`} actions={<><button id="tour-transaction-console" aria-label="Transactions" className="button-secondary" onClick={() => setCurrentScreen('logs')}><History size={18}/><span>Transactions</span></button><button id="tour-dashboard" aria-label="Dashboard" className="button-secondary" onClick={() => setCurrentScreen('dashboard')}><LayoutDashboard size={18}/><span>Dashboard</span></button></>}/>
 
             <div className="home-content">
                 {/* LOG EXPENSE CARD */}
-                <div className="log-card" id="tour-nlp">
+                <div className="log-card" id="tour-nlp"><span className="eyebrow" style={{color:'#a8b197',marginBottom:16}}>A LITTLE SOMETHING TO LOG</span>
                     <div className="amount-input-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
                         <div style={{ display: 'flex', alignItems: 'center', width: '100%', position: 'relative' }}>
-                            <span className="rupee-sign">₹</span>
+                            <span className="rupee-sign">Rs. </span>
                             <input
                                 onFocus={() => setInputFocused(true)}
                                 onBlur={() => setInputFocused(false)}
                                 type="text"
                                 className="super-amount-input"
-                                placeholder="150 pizza  or  pizza 150"
+                                placeholder="150 pizza"
+                                aria-label="Expense amount and description"
                                 value={nlpInput}
                                 onChange={e => setNlpInput(e.target.value)}
                                 onKeyDown={e => e.key === 'Enter' && handleAddExpense(e)}
                                 style={{ flex: 1, paddingRight: '85px' }}
                             />
-                            <div 
+                            <button type="button" aria-label="Choose expense date"
                                 onClick={() => setIsDateSheetOpen(true)}
                                 style={{
-                                    position: 'absolute',
+                                    position: 'absolute', border: 0,
                                     right: 0,
                                     background: '#f2f3f5',
                                     padding: '8px 10px',
@@ -325,14 +311,14 @@ export default function Home() {
                                 }}>
                                     {formatDateLabel(selectedDate)}
                                 </span>
-                            </div>
+                            </button>
                         </div>
                         {nlpInput.trim() && (
-                            <div style={{ marginTop: 4, fontSize: 12, fontWeight: 500, color: (mainPreview && mainPreview.title) ? '#c9f158' : '#202020' }}>
+                            <div style={{ marginTop: 4, fontSize: 12, fontWeight: 500, color: (mainPreview && mainPreview.title) ? '#557529' : '#202020' }}>
                                 {mainPreview && mainPreview.title
-                                    ? `✓ ₹${mainPreview.amount.toLocaleString('en-IN')} · ${mainPreview.title}`
+                                    ? `✓ Rs. ${mainPreview.amount.toLocaleString('en-IN')} · ${mainPreview.title}`
                                     : mainPreview && !mainPreview.title
-                                        ? `₹${mainPreview.amount.toLocaleString('en-IN')} — add a description`
+                                        ? `Rs. ${mainPreview.amount.toLocaleString('en-IN')} — add a description`
                                         : `Type amount + name in any order`}
                             </div>
                         )}
@@ -388,10 +374,12 @@ export default function Home() {
                     </div>
                 )}
 
-                    <button className="log-btn" onClick={handleAddExpense} disabled={!nlpInput.trim()}>
-                        blip.
+                    <button className="log-btn" onClick={handleAddExpense} disabled={savingExpense || !nlpInput.trim()}>
+                        Add expense
                     </button>
                 </div>
+
+                <section className="wallet-overview"><span className="eyebrow">{new Date().toLocaleDateString('en-IN',{month:'long'})} AT A GLANCE</span><div className="wallet-number">Rs. {spent.toLocaleString('en-IN',{maximumFractionDigits:2})}</div><div className="wallet-overview-footer"><span>Spent this month</span><span>{budget ? remainingDisplay : 'No budget set'}</span></div><div className="budget-track"><span style={{width:`${budget?Math.min(100,spent/budget*100):0}%`,background:remainingOver?'#bb7354':undefined}}/></div><p className="field-help" style={{marginBottom:0}}>{budget?`Your monthly limit is Rs. ${budget.toLocaleString('en-IN')}.`:'Set a spending limit in Profile when you’re ready.'}</p><div className="wallet-links"><button onClick={()=>setCurrentScreen('logs')}>View transactions <ArrowUpRight size={16} aria-hidden="true"/></button><button onClick={()=>setCurrentScreen('dashboard')}>See spending insights <ArrowUpRight size={16} aria-hidden="true"/></button></div></section>
 
                 <BottomSheet 
                     isOpen={isCatSheetOpen} 
@@ -445,20 +433,7 @@ export default function Home() {
                     title="Select Date"
                 >
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '10px 4px 30px 4px' }}>
-                        <input 
-                            type="date" 
-                            className="form-input"
-                            style={{ 
-                                width: '100%', fontSize: '18px', fontWeight: '600', border: '1px solid #e2e4e8',
-                                background: '#ffffff',
-                                borderRadius: '36px', padding: '14px', color: '#202020'
-                            }}
-                            value={selectedDate.toISOString().split('T')[0]}
-                            onChange={(e) => {
-                                setSelectedDate(new Date(e.target.value));
-                                setTimeout(() => setIsDateSheetOpen(false), 300);
-                            }}
-                        />
+                        <DateField value={localDate(selectedDate)} onChange={value => { if (value) { setSelectedDate(new Date(`${value}T12:00:00`)); setIsDateSheetOpen(false); } }}/>
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                             {['Today', 'Yesterday'].map((label) => {
@@ -705,7 +680,8 @@ export default function Home() {
                     </div>
                 ) : (
                     <div style={{
-                        background: 'var(--white)',
+                        background: '#f8f8f6',
+                        border: '1px solid #e9e9e5',
                         borderRadius: '24px',
                         padding: '8px 16px',
                         boxShadow: 'var(--shadow)'
@@ -787,7 +763,7 @@ export default function Home() {
 
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                             <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text)' }}>
-                                                ₹{Number(r.amount).toLocaleString()}
+                                                Rs. {Number(r.amount).toLocaleString()}
                                             </div>
                                             <ChevronRight size={22} color="var(--text-3)" />
                                         </div>
@@ -856,7 +832,7 @@ export default function Home() {
                                         </div>
 
                                         <span style={{ fontFamily: 'Montserrat, sans-serif', fontSize: 14, fontWeight: 700, color: 'var(--text-1)' }}>
-                                            ₹{Number(e.amount).toLocaleString()}
+                                            Rs. {Number(e.amount).toLocaleString()}
                                         </span>
                                     </div>
                                 </SwipeableItem>
@@ -868,7 +844,7 @@ export default function Home() {
                             animate={{ opacity: 1, y: 0 }}
                             style={{
                                 display: 'flex', flexDirection: 'column', alignItems: 'center',
-                                padding: '20px 24px',
+                                padding: '24px', background:'#f8f8f6', border:'1px solid #e9e9e5', borderRadius:24,
                                 textAlign: 'center', marginTop: 12
                             }}
                         >
@@ -908,7 +884,7 @@ export default function Home() {
                         {topExpenses.length >= 1 && (
                             <div className="mosaic-left">
                                 <div className="mosaic-label">{topExpenses[0].category}</div>
-                                <div className="mosaic-amount">₹{topExpenses[0].amount.toLocaleString()}</div>
+                                <div className="mosaic-amount">Rs. {topExpenses[0].amount.toLocaleString()}</div>
                                 <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.9)', marginTop: '4px', fontWeight: 600 }}>{topExpenses[0].description}</div>
                             </div>
                         )}
@@ -916,174 +892,46 @@ export default function Home() {
                             {topExpenses.slice(1, 4).map((e) => (
                                 <div className="mosaic-cell" key={e.id}>
                                     <div className="mosaic-label">{e.category}</div>
-                                    <div className="mosaic-amount">₹{e.amount.toLocaleString()}</div>
+                                    <div className="mosaic-amount">Rs. {e.amount.toLocaleString()}</div>
                                     <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.9)', marginTop: '2px', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.description}</div>
                                 </div>
                             ))}
                         </div>
                     </div>
                 ) : (
-                    <p style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontWeight: 500 }}>No expenses recorded this month.</p>
+                    <section className="wallet-empty-card"><span aria-hidden="true"><ArrowUpRight size={24}/></span><h3>A fresh month, a clear picture.</h3><p>No expenses recorded this month.</p><small>Your biggest expenses will appear here as you log them above.</small></section>
                 )}
 
                 <div style={{ height: '16px' }}></div>
             </div >
 
-            {/* SCHEDULE PAYMENT SHEET */}
-            < BottomSheet
-                isOpen={isSheetOpen}
-                onClose={() => { setIsSheetOpen(false); setRecInput(''); setRecParseError(''); }
-                }
-                title="Schedule a Payment"
-            >
-                <div className="form-field">
-                    <div className="amount-input-row" style={{
-                        borderRadius: '45px', padding: '0 14px',
-                        display: 'flex', alignItems: 'center',
-                    }}>
-                        <span style={{ fontSize: 22, color: 'var(--text-3)', fontWeight: 600, marginRight: 6 }}>₹</span>
-                        <input
-                            style={{ flex: 1, fontSize: 20, fontFamily: 'Montserrat, sans-serif', fontWeight: 600, background: 'transparent', border: 'none', outline: 'none', padding: '13px 0', color: 'var(--text)' }}
-                            placeholder='1200 rent  or  netflix 499'
-                            value={recInput}
-                            onChange={e => { setRecInput(e.target.value); setRecParseError(''); }}
-                            onKeyDown={e => e.key === 'Enter' && handleAddRecurring()}
-                            autoFocus
-                        />
-                    </div>
-                    {recInput.trim() && (
-                        <div style={{ marginTop: 8, fontSize: 13, fontWeight: 500, color: (sheetPreview && sheetPreview.title) ? 'var(--indigo)' : 'var(--text-3)' }}>
-                            {sheetPreview && sheetPreview.title
-                                ? `✓  ₹${sheetPreview.amount.toLocaleString('en-IN')}  ·  ${sheetPreview.title}`
-                                : sheetPreview && !sheetPreview.title
-                                    ? `₹${sheetPreview.amount.toLocaleString('en-IN')} — add a name`
-                                    : `Type amount + name in any order`}
-                        </div>
-                    )}
-                    {recParseError && <div style={{ marginTop: 6, fontSize: 12, color: 'var(--danger)' }}>{recParseError}</div>}
+            <BottomSheet isOpen={isSheetOpen} onClose={()=>{setIsSheetOpen(false);setRecParseError('');}} title="Schedule a payment">
+                <div className="wallet-panel">
+                    <div className="panel-intro"><span className="panel-icon"><Repeat size={22}/></span><div><h3>Make the regular things easy</h3><p>Track a monthly bill. Mark it paid when you pay it.</p></div></div>
+                    <label className="panel-field"><span>Payment name</span><input aria-label="Scheduled payment name" value={recName} onChange={event=>setRecName(event.target.value)} placeholder="e.g. Rent or Netflix" maxLength={100}/></label>
+                    <label className="payment-amount"><span>Amount · Rupees</span><div><b>Rs.</b><input aria-label="Scheduled payment amount" type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="0.00" value={recAmount} onChange={event=>setRecAmount(event.target.value)}/></div></label>
+                    <details className="panel-disclosure"><summary><span>Category</span><strong>{recCat || 'Bills'}</strong><ChevronDownIcon size={16}/></summary><div className="panel-choices">{catMap.map(category=><button key={category.name} aria-pressed={(recCat || 'Bills')===category.name} onClick={()=>setRecCat(category.name)}>{category.icon}<span>{category.name}</span></button>)}</div></details>
+                    <div><DayInput value={recDate} onChange={setRecDate}/><div className="panel-days">{[1,5,10,15,25].map(day=><button key={day} aria-pressed={Number(recDate)===day} onClick={()=>setRecDate(String(day))}>{day}</button>)}</div></div>
+                    {recParseError && <p className="form-error" role="alert">{recParseError}</p>}
+                    <button className="button-primary" disabled={savingSchedule || !recName.trim() || !recAmount} onClick={handleAddRecurring}>{savingSchedule?'Saving…':'Schedule payment'}</button>
                 </div>
+            </BottomSheet>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 4 }}>
-                    <div className="form-field">
-                        <div 
-                            className="categories-row" 
-                            style={{ 
-                                display: 'flex', 
-                                overflowX: 'auto', 
-                                padding: '12px 0',
-                                paddingBottom: '8px', 
-                                gap: '8px',
-                                scrollbarWidth: 'none',
-                                msOverflowStyle: 'none' 
-                            }}
-                        >
-                            <style>{`.categories-row::-webkit-scrollbar { display: none; }`}</style>
-                            
-                            {/* 1. Standard categories loop */}
-                            {catMap.map(c => (
-                                <div
-                                    key={c.name}
-                                    className={`cat-btn ${recCat === c.name ? 'selected' : ''}`}
-                                    onMouseDown={e => e.preventDefault()}
-                                    onClick={() => setRecCat(recCat === c.name ? '' : c.name)}
-                                    style={catBtnStyle}
-                                >
-                                    <span className="cat-icon">{c.icon}</span>
-                                    <span className="cat-label" style={{ fontSize: '10px', fontWeight: '700' }}>{c.name}</span>
-                                </div>
-                            ))}
-
-                            {/* 2. Custom category display (if recCat is not in catMap) */}
-                            {recCat && !catMap.find(c => c.name === recCat) && (
-                                <div
-                                    className="cat-btn selected"
-                                    onMouseDown={e => e.preventDefault()}
-                                    onClick={() => setRecCat('')}
-                                    style={{...catBtnStyle, flexShrink: 0 }}
-                                >
-                                    <span className="cat-icon"><Grid size={20} /></span>
-                                    <span className="cat-label" style={{ 
-                                        fontSize: '10px', 
-                                        fontWeight: '700',
-                                        maxWidth: '100%',
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        whiteSpace: 'nowrap'
-                                    }}>
-                                        {recCat}
-                                    </span>
-                                </div>
-                            )}
-
-                            {/* 3. The More button */}
-                            <div
-                                className="cat-btn"
-                                onClick={() => setIsCatSheetOpen(true)}
-                                onMouseDown={e => e.preventDefault()}
-                                style={{...catBtnStyle}}
-                            >
-                                <span className="cat-icon"><Plus size={20} /></span>
-                                <span className="cat-label" style={{ fontSize: '10px', fontWeight: '700' }}>More</span>
-                            </div>
-                        </div>
-                    </div>
-                    <DayInput value={recDate} onChange={setRecDate} />
+            <BottomSheet isOpen={isIncomeOpen} onClose={()=>setIsIncomeOpen(false)} title="Add money">
+                <div className="wallet-panel">
+                    <div className="panel-intro"><span className="panel-icon"><ArrowUpCircle size={22}/></span><div><h3>A little more room</h3><p>Record money you’ve received in your Wallet.</p></div></div>
+                    <label className="payment-amount"><span>Amount received · Rupees</span><div><b>Rs.</b><input aria-label="Amount received" type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="0.00" value={incomeAmt} onChange={event=>setIncomeAmt(event.target.value)}/></div></label>
+                    <div><label className="input-label">Where did it come from?</label><div className="panel-choices income-choices">{incomeSources.map(source=><button key={source.name} aria-pressed={incomeSource===source.name} onClick={()=>setIncomeSource(source.name)}>{source.icon}<span>{source.name}</span></button>)}</div></div>
+                    <button className="button-primary" disabled={savingIncome || !incomeAmt || Number(incomeAmt)<=0 || !incomeSource} onClick={handleAddIncome}>{savingIncome?'Saving…':'Add money'}</button>
                 </div>
-
-                <button
-                    className="overlay-submit"
-                    onClick={handleAddRecurring}
-                    disabled={!recInput.trim()}
-                    style={{ marginTop: 16, opacity: !recInput.trim() ? 0.45 : 1 }}
-                >
-                    Save Payment
-                </button>
-            </BottomSheet >
-
-            {/* ADD INCOME SHEET */}
-            < BottomSheet isOpen={isIncomeOpen} onClose={() => setIsIncomeOpen(false)} title="Add Money to Wallet" >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <div className="form-field">
-                        <div className="form-label">Amount Received (₹)</div>
-                        <input
-                            type="number"
-                            min="0"
-                            className="form-input"
-                            placeholder="₹0"
-                            value={incomeAmt}
-                            onChange={e => setIncomeAmt(Math.max(0, e.target.value))}
-                            style={{ fontSize: '20px', fontFamily: 'Montserrat, sans-serif', fontWeight: '700', borderRadius: 36 }}
-                        />
-                    </div>
-
-                    <div className="form-field">
-                        <div className="form-label">Income Source</div>
-                        <div className="categories-row" style={{ margin: 'auto 3px' }}>
-                            {incomeSources.map(s => (
-                                <div
-                                    key={s.name}
-                                    className={`cat-btn ${incomeSource === s.name ? 'selected' : ''}`}
-                                    onClick={() => setIncomeSource(incomeSource === s.name ? '' : s.name)}
-                                >
-                                    <span className="cat-icon">{s.icon}</span>
-                                    <span className="cat-label">{s.name}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    <button className="overlay-submit" onClick={handleAddIncome} disabled={!incomeAmt || !incomeSource} style={{ opacity: (!incomeAmt || !incomeSource) ? 0.45 : 1 }}>
-                        Add Money
-                    </button>
-                </div>
-            </BottomSheet >
+            </BottomSheet>
 
             <EditExpenseSheet
                 isOpen={!!editingExpense}
                 onClose={() => setEditingExpense(null)}
                 expense={editingExpense}
                 onSave={(updates) => {
-                    updateExpense(editingExpense.id, updates);
+                    return updateExpense(editingExpense.id, updates);
                 }}
             />
 
@@ -1106,7 +954,7 @@ export default function Home() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingBottom: '10px' }}>
                         <div style={{ textAlign: 'center', padding: '20px 0' }}>
                             <div style={{ fontSize: '12px', color: '#202020', marginBottom: '8px', fontWeight: 700, textTransform: 'uppercase' }}>Paying for {payingRecurring.title}</div>
-                            <div style={{ fontSize: '36px', fontWeight: 700, marginTop: '14px' }}>₹{Number(payingRecurring.amount).toLocaleString()}</div>
+                            <div style={{ fontSize: '36px', fontWeight: 700, marginTop: '14px' }}>Rs. {Number(payingRecurring.amount).toLocaleString()}</div>
                         </div>
 
                         <div style={{ padding: '16px', display: 'flex', justifyContent: 'space-between' }}>
@@ -1122,7 +970,7 @@ export default function Home() {
                             }}
                             style={{ background: '#202020', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                         >
-                            Pay ₹{Number(payingRecurring.amount).toLocaleString()}
+                            Pay Rs. {Number(payingRecurring.amount).toLocaleString()}
                         </button>
                         <button
                             className="overlay-submit"
@@ -1135,43 +983,11 @@ export default function Home() {
                 )}
             </BottomSheet>
 
-            <BottomSheet
-                isOpen={isPromptMonthOpen}
-                onClose={() => { }}
-                title="New Month, New Budget?"
-                dismissible={false}
-                showCloseButton={false}
-            >
-                <div style={{ paddingBottom: '16px' }}>
-                    <p style={{ color: 'var(--text-3)', fontSize: '14px', marginBottom: '20px' }}>
-                        Welcome to a new month! Your previous month's budget was <strong>₹{user?.budget?.toLocaleString()}</strong>. You must set a budget to continue.
-                    </p>
-
-                    <div className="form-field">
-                        <div className="form-label">This Month's Budget (₹)</div>
-                        <input
-                            type="number"
-                            min="1" // Ensure they can't submit 0
-                            className="form-input"
-                            value={promptBudget}
-                            onChange={e => setPromptBudget(e.target.value)}
-                            style={{ fontSize: '20px', fontFamily: 'Montserrat, sans-serif', fontWeight: '700' }}
-                        />
-                    </div>
-
-                    <button
-                        className="overlay-submit"
-                        onClick={handleSaveMonthBudget}
-                        disabled={!promptBudget || Number(promptBudget) <= 0}
-                        style={{
-                            marginTop: '16px',
-                            opacity: (!promptBudget || Number(promptBudget) <= 0) ? 0.45 : 1,
-                            cursor: (!promptBudget || Number(promptBudget) <= 0) ? 'not-allowed' : 'pointer'
-                        }}
-                    >
-                        Confirm & Start Month
-                    </button>
-                </div>
+            <BottomSheet isOpen={isPromptMonthOpen} onClose={()=>{if(!budgetSaving)setIsPromptMonthOpen(false);}} title="Your monthly check-in">
+                <p className="field-help">Your budget for {new Date().toLocaleDateString('en-IN',{month:'long',year:'numeric'})} is Rs. {Number(user.budget||0).toLocaleString('en-IN')}. Keep it or make a change. We’ll ask just once this month; you can always edit it in Profile.</p>
+                <label className="input-label" htmlFor="monthly-budget">Monthly spending limit</label><div className="budget-input"><span>Rs. </span><input id="monthly-budget" type="number" min="0" step="0.01" inputMode="decimal" value={promptBudget} onChange={e=>setPromptBudget(e.target.value)}/></div>
+                {budgetError && <p className="form-error" role="alert">{budgetError}</p>}
+                <div className="budget-check-actions"><button className="button-secondary" disabled={budgetSaving} onClick={()=>setIsPromptMonthOpen(false)}>Keep current budget</button><button className="button-primary" disabled={budgetSaving || promptBudget==='' || !Number.isFinite(Number(promptBudget)) || Number(promptBudget)<0} onClick={handleSaveMonthBudget}>{budgetSaving?'Saving…':'Save budget'}</button></div>
             </BottomSheet>
 
             {/* SHOPPING LIST SHEET */}
@@ -1369,7 +1185,7 @@ export default function Home() {
                             </p>
 
                             <div className="amount-input-row" style={{ background: 'var(--bg)', border: '1px solid var(--border)', padding: '0 16px', marginBottom: 20 }}>
-                                <span style={{ fontSize: 24, color: 'var(--text-2)', marginRight: 8, fontWeight: 600 }}>₹</span>
+                                <span style={{ fontSize: 24, color: 'var(--text-2)', marginRight: 8, fontWeight: 600 }}>Rs. </span>
                                 <input
                                     type="number"
                                     autoFocus

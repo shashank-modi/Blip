@@ -1,3 +1,4 @@
+import InstallPrompt from '../components/InstallPrompt';
 import React, { useRef } from 'react';
 import { motion, useInView, useScroll } from 'framer-motion';
 import { Cpu, Layers, Shield, ArrowRight, Sparkles, CheckCircle2, Smartphone, Monitor, Plus, Share, MoreVertical, Heart } from 'lucide-react';
@@ -92,6 +93,7 @@ export default function LandingPage({ onGetStarted }) {
 
     return (
         <>
+            <InstallPrompt />
             <style>{`
                 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;700&display=swap');
 
@@ -526,7 +528,7 @@ export default function LandingPage({ onGetStarted }) {
                                 }}
                                 style={{ fontSize: rupee.size }}
                             >
-                                ₹
+                                Rs.
                             </motion.div>
                         </motion.div>
                     ))}
@@ -607,7 +609,7 @@ export default function LandingPage({ onGetStarted }) {
                                 animate={featuresInView ? { opacity: 1, y: 0 } : {}}
                                 transition={{ duration: 0.6, delay: 0.3 }}
                             >
-                                Other apps make you fill category dropdowns and pickers just to log a ₹12 tea. Blip parses what you type and figures out the rest automatically.
+                                Other apps make you fill category dropdowns and pickers just to log a Rs. 12 tea. Blip parses what you type and figures out the rest automatically.
                             </motion.p>
 
                             <motion.div
@@ -717,7 +719,7 @@ export default function LandingPage({ onGetStarted }) {
                                 </motion.div>
                             ))}
                             <div style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.06)', fontSize: 13, color: 'rgba(255,255,255,0.35)', fontWeight: 600, textAlign: 'center' }}>
-                                Opens instantly, works offline, feels native.
+                                One tap from your Home Screen. No App Store needed.
                             </div>
                         </motion.div>
                     ) : (

@@ -3,8 +3,10 @@ import { getUserId, requireAuth } from '../middleware/auth.js';
 import { query } from '../db/client.js';
 import { toTitleCase } from '../utils/format.js';
 
+import { cents } from '../utils/money.js';
 const router = express.Router();
 router.use(requireAuth);
+
 router.get('/', async (req, res, next) => {
     try {
         const userId = getUserId(req);
@@ -12,6 +14,7 @@ router.get('/', async (req, res, next) => {
         let sql = 'SELECT * FROM expenses WHERE user_id = $1';
         const params = [userId];
 
+        if (month && !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return res.status(400).json({ error: 'Invalid month' });
         if (month) {
             sql += ` AND date >= $2::date AND date < ($2::date + interval '1 month')`;
             params.push(`${month}-01`);
@@ -30,11 +33,11 @@ router.get('/recents', async (req, res, next) => {
         const userId = getUserId(req);
         // DISTINCT ON gets the exact last 5 combos
         const result = await query(
-            `SELECT DISTINCT ON (category, description) category, description, amount, date 
-       FROM expenses 
-       WHERE user_id = $1 
-       ORDER BY category, description, date DESC
-       LIMIT 15`,
+            `SELECT * FROM (
+                SELECT DISTINCT ON (category, description) category, description, amount, date
+                FROM expenses WHERE user_id = $1 AND category != 'Income'
+                ORDER BY category, description, date DESC
+             ) recent ORDER BY date DESC LIMIT 5`,
             [userId]
         );
         // JS sort to actually get most recent globally 5 items out of the distinct sets
@@ -44,11 +47,13 @@ router.get('/recents', async (req, res, next) => {
         next(err);
     }
 });
-
+ 
 router.post('/', async (req, res, next) => {
     try {
         const userId = getUserId(req);
         let { amount, category, description, date } = req.body;
+        amount = cents(amount) / 100;
+        if (date && !Number.isFinite(Date.parse(date))) return res.status(400).json({ error: 'Invalid date' });
         description = toTitleCase(description);
 
         const result = await query(
@@ -85,9 +90,10 @@ router.patch('/:id', async (req, res, next) => {
         const current = await query('SELECT * FROM expenses WHERE id = $1 AND user_id = $2', [req.params.id, userId]);
         if (current.rows.length === 0) return res.status(404).json({ error: 'Not found' });
 
-        const newAmount = amount !== undefined ? amount : current.rows[0].amount;
+        const newAmount = amount !== undefined ? cents(amount) / 100 : current.rows[0].amount;
         const newDesc = description !== undefined ? description : current.rows[0].description;
         const newCat = category !== undefined ? category : current.rows[0].category;
+        if (date && !Number.isFinite(Date.parse(date))) return res.status(400).json({ error: 'Invalid date' });
         const newDate = date !== undefined ? date : current.rows[0].date;
 
         const result = await query(

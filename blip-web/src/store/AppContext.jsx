@@ -1,12 +1,14 @@
-import { createContext, useContext, useMemo, useState, useEffect, useCallback } from 'react';
+import { disablePush } from '../lib/pwa';
+import { monthKey, expensesForMonth } from '../utils/month';
+import { createContext, useContext, useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth, useUser } from '@clerk/clerk-react';
 import { api, setApiTokenGetter } from '../lib/api';
 import toast from 'react-hot-toast';
 
 
-const CURRENT_APP_VERSION = '2.0.0';
+const CURRENT_APP_VERSION = '3.0.0';
 
-const AppContext = createContext();
+export const AppContext = createContext();
 export const useApp = () => useContext(AppContext);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -86,16 +88,29 @@ export const AppProvider = ({ children }) => {
     const version = CURRENT_APP_VERSION;
 
     const [user, setUser] = useState({ id: null, name: '', budget: 0, isNewUser: true, email: '', phone: '' });
-    const [currentScreen, setCurrentScreen] = useState('home');
+    const [currentScreen, setCurrentScreen] = useState(() => new URLSearchParams(window.location.search).get('tab') === 'activity' ? 'activity' : 'friends');
+    const [activeMonth, setActiveMonth] = useState(monthKey);
     const [expenses, setExpenses] = useState([]);
+    const [budgetHistory, setBudgetHistory] = useState([]);
+    const budgetClaimPending = useRef(null);
     const [recurring, setRecurring] = useState([]);
     const [investments, setInvestments] = useState([]);
     const [shoppingList, setShoppingList] = useState([]);
     const [friends, setFriends] = useState([]);
+    const [socialSummary, setSocialSummary] = useState({ owed: 0, owing: 0 });
     const [groups, setGroups] = useState([]);
+    const [notifications, setNotifications] = useState([]);
+    const [notificationError, setNotificationError] = useState('');
+    const seenNotifications = useRef(null);
+    const notificationBusy = useRef(false);
+    const notificationRevision = useRef(0);
     const [loading, setLoading] = useState(true);
+    const [startupError, setStartupError] = useState('');
+    const initialized = useRef(false);
+    const bootstrappedAccount = useRef(null);
     const [error, setError] = useState('');
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const refreshPending = useRef(null);
 
     const categories = useMemo(() => ['Food', 'Transport', 'Shopping', 'Entertainment', 'Bills', 'General'], []);
 
@@ -146,14 +161,17 @@ export const AppProvider = ({ children }) => {
         }
     };
 
+    const friendDetailRevision = useRef(0);
     const syncFriendDetail = useCallback(async (friendId) => {
         if (!friendId) return;
+        const revision = ++friendDetailRevision.current;
         try {
             const [exps, friendsData] = await Promise.all([
                 api.getFriendExpenses(friendId),
                 api.getFriends()
             ]);
 
+            if (revision !== friendDetailRevision.current) return;
             const normalizedFriends = (friendsData || []).map(f => ({ ...f, balance: parseFloat(f.balance || 0) }));
             setFriends(normalizedFriends);
 
@@ -161,26 +179,30 @@ export const AppProvider = ({ children }) => {
 
             setActiveFriendContext(prev => ({
                 ...prev,
+                details: normalizedFriends.find(friend => friend.id === friendId) || { id:friendId },
                 expenses: exps,
                 balance: friendBal
             }));
-
+            return true;
         } catch (err) {
             setErrorFrom(err, 'Failed to sync friend details');
+            return false;
         }
     }, [setFriends, setErrorFrom]);
 
     const syncGroupDetail = useCallback(async (groupId) => {
         if (!groupId) return;
         try {
-            const [meta, exps, bals] = await Promise.all([
+            const [meta, exps, bals, totals] = await Promise.all([
                 api.getGroup(groupId),
                 api.getGroupExpenses(groupId),
-                api.getGroupBalances(groupId)
+                api.getGroupBalances(groupId),
+                api.getGroupTotals(groupId)
             ]);
 
             const groupData = {
                 metadata: meta,
+                totals,
                 expenses: exps,
                 balances: bals.balances || [],
                 suggestions: bals.settlements || []
@@ -199,6 +221,7 @@ export const AppProvider = ({ children }) => {
             return groupData;
         } catch (err) {
             setErrorFrom(err, 'Failed to sync group details');
+            return false;
         }
     }, [setErrorFrom]);
 
@@ -206,7 +229,8 @@ export const AppProvider = ({ children }) => {
 
     const bootstrapData = useCallback(async (isRefresh = false) => {
         if (!isSignedIn || !clerkUser) return;
-        if (!isRefresh) setLoading(true);
+        if (!isRefresh && !initialized.current) setLoading(true);
+        setStartupError('');
         setError('');
 
         try {
@@ -215,6 +239,7 @@ export const AppProvider = ({ children }) => {
 
             const syncResult = await api.syncUser({ name, email });
             const userData = syncResult.user || await api.getMe();
+            if (bootstrappedAccount.current !== clerkUser.id) return;
             const isNewUser = syncResult.created === true;
 
             setUser({
@@ -229,6 +254,7 @@ export const AppProvider = ({ children }) => {
             });
 
             if (!userData.is_onboarded) {
+                initialized.current = true;
                 setCurrentScreen('onboarding');
                 setLoading(false);
                 return;
@@ -238,29 +264,32 @@ export const AppProvider = ({ children }) => {
                 setShowWhatsNew(true);
             }
 
-            await api.generateRecurringLogs();
-
             const [
                 expensesData,
                 recurringTemplates,
                 recurringLogs,
-                investmentsResponse,
                 shoppingData,
                 friendsData,
-                groupsData
+                groupsData,
+                summaryData,
+                budgets
             ] = await Promise.all([
                 api.getExpenses(),
                 api.getRecurringTemplates(),
-                api.getRecurringLogs(currentMonth()),
-                api.getInvestments(),
+                api.generateRecurringLogs(currentMonth()).then(()=>api.getRecurringLogs(currentMonth())),
                 api.getShoppingItems(),
                 api.getFriends(),
                 api.getGroups(),
+                api.getSocialSummary(),
+                api.getBudgets(),
             ]);
 
+            if (bootstrappedAccount.current !== clerkUser.id) return;
+            setBudgetHistory(budgets.history);
+            setUser(previous => ({...previous,budget:budgets.current?.amount ?? previous.budget}));
+            setSocialSummary(summaryData);
             setExpenses(expensesData.map(normalizeExpense));
             setRecurring(mergeRecurringForMonth(recurringTemplates, recurringLogs));
-            setInvestments((investmentsResponse.investments || []).map(normalizeInvestment));
             setShoppingList(shoppingData || []);
 
             setFriends((friendsData || []).map(f => ({ ...f, balance: parseFloat(f.balance || 0) })));
@@ -270,25 +299,39 @@ export const AppProvider = ({ children }) => {
                 balance: g.balance || "0.00"
             })));
 
+            initialized.current = true;
+            return true;
         } catch (err) {
+            if (bootstrappedAccount.current !== clerkUser.id) return;
+            if (!initialized.current) setStartupError(err.message || 'Could not load your account. Please try again.');
             setErrorFrom(err, 'Failed to load app data');
+            return false;
         } finally {
-            setLoading(false);
+            if (bootstrappedAccount.current === clerkUser.id) setLoading(false);
         }
     }, [isSignedIn, clerkUser, setErrorFrom]);
 
+    useEffect(()=>{setApiTokenGetter(isSignedIn ? getToken : null);},[isSignedIn,getToken]);
     useEffect(() => {
         if (!authLoaded) return;
         if (!isSignedIn) {
+            bootstrappedAccount.current = null;
+            initialized.current = false;
+            setStartupError('');
             setApiTokenGetter(null);
             setUser({ name: '', phone: '', budget: 0, isNewUser: true, email: '' });
             setExpenses([]); setRecurring([]); setInvestments([]); setShoppingList([]); setFriends([]); setGroups([]);
-            setCurrentScreen('home'); setLoading(false);
+            setSocialSummary({ owed: 0, owing: 0 });
+            setCurrentScreen('friends'); setLoading(false);
             return;
         }
-        setApiTokenGetter(getToken);
+        if (!clerkUser?.id || bootstrappedAccount.current === clerkUser.id) return;
+        bootstrappedAccount.current = clerkUser.id;
+        initialized.current = false;
+        setActiveFriendContext({details:null,expenses:[],balance:0});
+        setActiveGroupContext({metadata:null,expenses:[],balances:[],totals:null});
         bootstrapData();
-    }, [authLoaded, isSignedIn, getToken, bootstrapData]);
+    }, [authLoaded, isSignedIn, clerkUser?.id, bootstrapData]);
 
     // ── Refresh helpers ───────────────────────────────────────────────────────
     const refreshRecurring = useCallback(async () => {
@@ -309,11 +352,15 @@ export const AppProvider = ({ children }) => {
     }, [setErrorFrom]);
 
     const refreshSocial = useCallback(async () => {
+        const revision=++notificationRevision.current;
         try {
-            const [fRes, gRes] = await Promise.all([
+            const [fRes, gRes, summary] = await Promise.all([
                 api.getFriends(),
-                api.getGroups()
+                api.getGroups(),
+                api.getSocialSummary(),
+                api.getNotifications().then(items=>{if(revision===notificationRevision.current){setNotifications(items);setNotificationError('');}}).catch(err=>{if(revision===notificationRevision.current)setNotificationError(err.message || 'Could not load activity');})
             ]);
+            setSocialSummary(summary);
             setFriends((fRes || []).map(f => ({ ...f, balance: parseFloat(f.balance || 0) })));
             setGroups((gRes || []).map(g => ({
                 ...g,
@@ -322,6 +369,56 @@ export const AppProvider = ({ children }) => {
             })));
         } catch (err) { setErrorFrom(err, 'Failed to refresh social data'); }
     }, [setErrorFrom]);
+
+    const refreshNotifications = useCallback(async (force = false) => {
+        if (force !== true && (notificationBusy.current || document.visibilityState === 'hidden')) return;
+        notificationBusy.current = true;
+        const revision=++notificationRevision.current;
+        try {
+            const items = await api.getNotifications();
+            if(revision!==notificationRevision.current) return;
+            const previousSeen = seenNotifications.current;
+            seenNotifications.current = new Set(items.map(item => item.id));
+            if (previousSeen) {
+                const added = items.filter(item => !previousSeen.has(item.id) && !item.read_at && item.actor_id !== user.id);
+                if (added.length) {
+                    toast(added.length === 1 ? added[0].message : `${added.length} new expense updates`, { icon: '🔔' });
+                    await refreshSocial();
+                    if (activeFriendContext.details?.id) await syncFriendDetail(activeFriendContext.details.id);
+                    if (activeGroupContext.metadata?.id) await syncGroupDetail(activeGroupContext.metadata.id);
+                }
+            }
+            if(revision!==notificationRevision.current) return;
+            seenNotifications.current = new Set(items.map(item => item.id));
+            setNotifications(items);
+            setNotificationError('');
+            return true;
+        } catch (err) { setNotificationError(err.message || 'Could not load notifications'); return false; }
+        finally { notificationBusy.current = false; }
+    }, [refreshSocial, syncFriendDetail, syncGroupDetail, activeFriendContext.details?.id, activeGroupContext.metadata?.id, user.id]);
+
+    useEffect(() => {
+        notificationRevision.current++;
+        seenNotifications.current = null;
+        setNotifications([]);
+    }, [user.id]);
+
+    useEffect(() => {
+        if (!isSignedIn || !user.isOnboarded) return;
+        refreshNotifications();
+        const timer = setInterval(refreshNotifications, 15000);
+        window.addEventListener('focus', refreshNotifications);
+        document.addEventListener('visibilitychange', refreshNotifications);
+        return () => { clearInterval(timer); window.removeEventListener('focus', refreshNotifications); document.removeEventListener('visibilitychange', refreshNotifications); };
+    }, [user.id, user.isOnboarded, isSignedIn, refreshNotifications]);
+
+    const markNotificationsRead = async ids => {
+        try {
+            await api.markNotificationsRead(ids);
+            setNotifications(items => items.map(item => ids.includes(item.id) ? { ...item, read_at: new Date().toISOString() } : item));
+            return true;
+        } catch (err) { setNotificationError(err.message); return false; }
+    };
 
     // ── NLP parser ────────────────────────────────────────────────────────────
     const parseExpenseInput = (input) => {
@@ -338,7 +435,7 @@ export const AppProvider = ({ children }) => {
 
     const addExpenseNLP = async (inputStr, selectedCategory, selectedDate) => {
         const parsed = parseExpenseInput(inputStr);
-        if (!parsed) return;
+        if (!parsed) return false;
         let { amount, title: description } = parsed;
         description = toTitleCase(description || 'Manual Entry');
         const bestCat = selectedCategory || autoCategory(description) || 'General';
@@ -349,36 +446,38 @@ export const AppProvider = ({ children }) => {
 
         if (!window.navigator.onLine) {
             toast.error("Can't save while offline. Please reconnect.");
-            return;
+            return false;
         }
         setExpenses(prev => [tempExp, ...prev]);
-        triggerFlow('expense', amount);
 
         try {
             const created = await api.createExpense({ amount, description, category: bestCat, date: dateStr });
             setExpenses(prev => prev.map(e => e.id === tempId ? normalizeExpense(created) : e));
+            void refreshNotifications(true);
+            triggerFlow('expense', amount);
+            return true;
         } catch (err) {
             setErrorFrom(err, 'Failed to add expense');
             setExpenses(prev => prev.filter(e => e.id !== tempId));
+            return false;
         }
     };
 
     const deleteExpense = async (id) => {
-        // Optimistic + toast — before await
-        setExpenses(prev => prev.filter(e => String(e.id) !== String(id)));
-        showToast.success('Transaction removed');
         try {
             await api.deleteExpense(id);
+            setExpenses(prev => prev.filter(e => String(e.id) !== String(id)));
+            void refreshNotifications(true);
+            showToast.success('Transaction removed');
+            return true;
         } catch (err) {
             setErrorFrom(err, 'Failed to delete expense');
-            await bootstrapData();
+            showToast.error('Could not delete this entry. Please try again.');
+            return false;
         }
     };
 
     const updateExpense = async (id, updates) => {
-        // Optimistic + toast — before await
-        setExpenses(prev => prev.map(e => String(e.id) === String(id) ? { ...e, ...updates } : e));
-        showToast.success('Changes saved');
         try {
             const payload = {};
             if (updates.amount !== undefined) payload.amount = parseFloat(updates.amount);
@@ -387,8 +486,12 @@ export const AppProvider = ({ children }) => {
             if (updates.date !== undefined) payload.date = updates.date;
             const updated = await api.updateExpense(id, payload);
             setExpenses(prev => prev.map(e => String(e.id) === String(id) ? normalizeExpense(updated) : e));
+            void refreshNotifications(true);
+            showToast.success('Changes saved');
+            return true;
         } catch (err) {
             setErrorFrom(err, 'Failed to update expense');
+            return false;
         }
     };
 
@@ -396,63 +499,65 @@ export const AppProvider = ({ children }) => {
 
     const addIncome = async (amount, source) => {
         const parsedAmount = parseFloat(amount);
-        if (!parsedAmount || parsedAmount <= 0) return;
+        if (!parsedAmount || parsedAmount <= 0) return false;
         const tempId = `temp-${Date.now()}`;
         const tempExp = { id: tempId, amount: parsedAmount, description: source || 'Added Funds', category: 'Income', date: new Date().toISOString() };
 
         // Optimistic + animation — before await
         setUser(prev => ({ ...prev, budget: prev.budget + parsedAmount }));
         setExpenses(prev => [tempExp, ...prev]);
-        triggerFlow('income', parsedAmount);
 
         try {
             const result = await api.addIncome({ amount: parsedAmount, description: source || 'Added Funds' });
+            void refreshNotifications(true);
             setUser(prev => ({ ...prev, budget: Number(result.new_budget) }));
             if (result.transaction) {
                 setExpenses(prev => prev.map(e => e.id === tempId ? normalizeExpense(result.transaction) : e));
             }
+            triggerFlow('income', parsedAmount);
+            return true;
         } catch (err) {
             setErrorFrom(err, 'Failed to add income');
             await bootstrapData();
+            return false;
         }
     };
 
     // ── BUDGET ────────────────────────────────────────────────────────────────
 
-    const updateUserBudget = async (newBudget) => {
-        const parsed = parseFloat(newBudget);
-        if (!parsed || parsed <= 0) return;
-
-        // Optimistic + toast — before await
-        setUser(prev => ({ ...prev, budget: parsed }));
-        showToast.success(`Budget updated to ₹${parsed.toLocaleString('en-IN')}`);
-
+    const claimMonthlyBudgetPrompt = useCallback(async () => {
+        if (budgetClaimPending.current) return false;
+        budgetClaimPending.current = true;
         try {
-            await api.updateBudget(parsed);
-        } catch (err) {
-            setErrorFrom(err, 'Failed to update budget');
-            await bootstrapData();
-        }
+            const state = await api.claimBudgetCheckIn();
+            setBudgetHistory(state.history);
+            return state.showPrompt;
+        } catch (err) { setErrorFrom(err,'Could not check this month’s budget'); return false; }
+        finally { budgetClaimPending.current = null; }
+    }, [setErrorFrom]);
+
+    const updateUserBudget = async newBudget => {
+        const parsed=Number(newBudget);
+        if (!Number.isFinite(parsed) || parsed < 0) return false;
+        try {
+            const saved=await api.updateBudget(parsed);
+            setUser(previous=>({...previous,budget:Number(saved.monthly_budget)}));
+            setBudgetHistory(saved.budgets.history);
+            showToast.success('Monthly budget saved');
+            return true;
+        } catch(err) { setErrorFrom(err,'Could not save budget'); return false; }
     };
 
-    const updatePhone = async (newPhone) => {
-        const parsed = newPhone.replace(/\D/g, '');
-        if (parsed.length !== 10) return;
-
-        setUser(prev => ({ ...prev, phone: parsed }));
-        showToast.success(`Phone updated to ${parsed}`);
+    const updatePhone = async (phone) => {
         try {
-            await api.updatePhone(parsed);
-        } catch (err) {
-            setErrorFrom(err, 'Failed to update phone');
-            await bootstrapData();
-        }
-    }
+            const saved = await api.updatePhone(phone);
+            setUser(prev => ({ ...prev, phone: saved.phone }));
+            showToast.success('Phone number updated');
+        } catch (err) { setErrorFrom(err, 'Failed to update phone'); throw err; }
+    };
 
     const completeOnboarding = async (name, budget, source, phone) => {
-        setLoading(true);
         try {
-            const email = clerkUser?.primaryEmailAddress?.emailAddress || '';
             const parsedAmount = parseFloat(budget) || 0;
             await api.updateBudget(parsedAmount, phone);
             await api.updateOnboardingStatus(true);
@@ -469,20 +574,19 @@ export const AppProvider = ({ children }) => {
 
             await bootstrapData(true);
 
-            setCurrentScreen('home');
+            setCurrentScreen('friends');
             showToast.success('Welcome to blip.');
         } catch (err) {
             setErrorFrom(err, 'Onboarding failed');
             showToast.error('Could not save your profile.');
-        } finally {
-            setLoading(false);
+            throw err;
         }
     };
 
     // ── RECURRING ─────────────────────────────────────────────────────────────
     const addRecurring = async (title, amount, category, dueDate) => {
         const parsedAmount = parseFloat(amount);
-        if (!parsedAmount || parsedAmount <= 0) return;
+        if (!parsedAmount || parsedAmount <= 0) return false;
         const cTitle = toTitleCase(title);
         const bestCat = category || autoCategory(cTitle) || 'Bills';
         const tempItem = {
@@ -493,14 +597,16 @@ export const AppProvider = ({ children }) => {
 
         // Optimistic + toast — before await
         setRecurring(prev => [...prev, tempItem].sort((a, b) => a.dueDate - b.dueDate));
-        showToast.success('Payment scheduled');
 
         try {
             await api.createRecurringTemplate({ title: cTitle, amount: parsedAmount, category: bestCat, due_day: parseInt(dueDate, 10) || 1 });
-            refreshRecurring();
+            await refreshRecurring();
+            showToast.success('Payment scheduled');
+            return true;
         } catch (err) {
             setErrorFrom(err, 'Failed to add recurring payment');
-            refreshRecurring();
+            await refreshRecurring();
+            return false;
         }
     };
 
@@ -546,7 +652,10 @@ export const AppProvider = ({ children }) => {
             if (!recurringItem) return;
 
             if (!recurringItem.logId) {
-                await api.generateRecurringLogs();
+                const budgets = await api.getBudgets();
+            setBudgetHistory(budgets.history);
+            setUser(previous => ({...previous,budget:budgets.current?.amount ?? previous.budget}));
+            await api.generateRecurringLogs(currentMonth());
                 const [freshTemplates, freshLogs] = await Promise.all([
                     api.getRecurringTemplates(),
                     api.getRecurringLogs(currentMonth()),
@@ -571,9 +680,11 @@ export const AppProvider = ({ children }) => {
                 String(item.templateId) === String(templateId) ? { ...item, isPaid: true } : item
             ));
             setExpenses(prev => [tempExp, ...prev]);
-            triggerCelebration('paid', recurringItem.amount, recurringItem.title);
+
 
             const result = await api.markRecurringPaid(recurringItem.logId, recurringItem.amount);
+            triggerCelebration('paid', recurringItem.amount, recurringItem.title);
+            void refreshNotifications(true);
 
             if (result?.expense) {
                 setExpenses(prev => prev.map(e => e.id === tempId ? normalizeExpense(result.expense) : e));
@@ -590,6 +701,7 @@ export const AppProvider = ({ children }) => {
         } catch (err) {
             setErrorFrom(err, 'Failed to mark recurring payment as paid');
             await refreshRecurring();
+            setExpenses((await api.getExpenses()).map(normalizeExpense));
         }
     };
 
@@ -730,130 +842,147 @@ export const AppProvider = ({ children }) => {
     };
 
     const createGroup = async (data) => {
-        showToast.success('Group created');
         try {
             await api.createGroup(data);
+            showToast.success('Group created');
             await refreshSocial();
         } catch (err) { setErrorFrom(err, 'Failed to create group'); throw err; }
     };
 
     const addFriendExpense = async (friendId, data) => {
-        // Optimistic flow
-        triggerFlow('expense', data.amount);
         try {
             await api.addFriendExpense(friendId, data);
-            await refreshSocial();
+            triggerFlow('expense', data.amount);
+            await Promise.all([refreshSocial(),syncFriendDetail(friendId)]);
         } catch (err) { setErrorFrom(err, 'Failed to add expense'); throw err; }
     };
 
     const addGroupExpense = async (groupId, data) => {
-        triggerFlow('expense', data.amount);
         try {
             await api.addGroupExpense(groupId, data);
-            await refreshSocial();
+            triggerFlow('expense', data.amount);
+            await Promise.all([refreshSocial(),syncGroupDetail(groupId)]);
         } catch (err) { setErrorFrom(err, 'Failed to add group expense'); throw err; }
     };
 
     const editSocialExpense = async (expenseId, data) => {
-        showToast.success('Expense updated');
         try {
             await api.editExpense(expenseId, data);
+            showToast.success('Expense updated');
+            await refreshSocial();
         } catch (err) { setErrorFrom(err, 'Failed to edit expense'); throw err; }
     };
 
     const deleteSocialExpense = async (expenseId) => {
-        showToast.success('Expense deleted');
         try {
             await api.deleteSocialExpense(expenseId);
+            showToast.success('Expense deleted');
+            await refreshSocial();
         } catch (err) { setErrorFrom(err, 'Failed to delete expense'); throw err; }
     };
 
     const deleteSocialPayment = async (paymentId) => {
-        showToast.success('Payment deleted');
         try {
             await api.deleteSocialPayment(paymentId);
+            setExpenses((await api.getExpenses()).map(normalizeExpense));
+            showToast.success('Payment deleted');
+            await refreshSocial();
         } catch (err) { setErrorFrom(err, 'Failed to delete payment'); throw err; }
     };
 
-    const settleFriend = async (friendId, amount, name, shouldLog = false) => {
-        const description = `Paid ${name}`;
-        triggerFlow('income', amount);
+    const settleFriend = async (friendId, amount, name, shouldLog = false, payerId) => {
         try {
-            await api.settleFriend(friendId, amount);
-
-            if (shouldLog) await addExpenseNLP(`${amount} ${description}`, 'Social', new Date());
-
-            const f = friends.find(f => f.id === friendId);
-            if (f) {
-                const bal = parseFloat(f.balance || 0);
-                const newBal = bal > 0 ? bal - amount : bal + amount;
-            }
+            const result = await api.settleFriend(friendId, amount, shouldLog, payerId);
+            if (shouldLog) setExpenses((await api.getExpenses()).map(normalizeExpense));
+            triggerFlow('settlement', amount);
             await refreshSocial();
         } catch (err) { setErrorFrom(err, 'Failed to settle with friend'); throw err; }
     };
 
-    const settleGroup = async (groupId, toUserId, amount, name, owes, shouldLog=false) => {
-        const description = `Paid ${name}`;
-        triggerFlow('income', amount);
+    const settleGroup = async (groupId, toUserId, amount, name, owes, shouldLog = false, payerId, receiverId) => {
         try {
-            await api.settleGroup(groupId, toUserId, amount);
-
-            if (shouldLog) await addExpenseNLP(`${amount} ${description}`, 'Social', new Date());
-
+            const result = await api.settleGroup(groupId, toUserId, amount, shouldLog, payerId, receiverId);
+            if (shouldLog) setExpenses((await api.getExpenses()).map(normalizeExpense));
+            triggerFlow('settlement', amount);
             await refreshSocial();
         } catch (err) { setErrorFrom(err, 'Failed to settle in group'); throw err; }
     };
 
     const deleteGroup = async (groupId) => {
-        const oldGroups = [...groups];
-        setGroups(prev => prev.filter(g => g.id !== groupId));
-        showToast.success('Group deleted');
         try {
             await api.deleteGroup(groupId);
-        } catch (err) {
-            setGroups(oldGroups);
-            setErrorFrom(err, 'Failed to delete group');
-        }
+            await refreshSocial();
+            showToast.success('Group archived');
+        } catch (err) { setErrorFrom(err, 'Failed to archive group'); throw err; }
     };
 
     const updateGroupSettings = async (groupId, updates) => {
-        showToast.success('Group updated');
         try {
             await api.updateGroup(groupId, updates);
-            await syncGroupDetail(groupId);
+            await Promise.all([syncGroupDetail(groupId), refreshSocial()]);
+            showToast.success('Group updated');
         } catch (err) { setErrorFrom(err, 'Failed to update group'); throw err; }
     };
 
     const addGroupMember = async (groupId, userId) => {
-        showToast.success('Member added');
         try {
             await api.addMember(groupId, userId);
-            await syncGroupDetail(groupId);
+            await Promise.all([syncGroupDetail(groupId), refreshSocial()]);
+            showToast.success('Member added');
         } catch (err) { setErrorFrom(err, 'Failed to add member'); throw err; }
     };
 
     const removeGroupMember = async (groupId, userId) => {
-        showToast.success('Member removed');
         try {
             await api.removeMember(groupId, userId);
-            await syncGroupDetail(groupId);
+            await Promise.all([syncGroupDetail(groupId), refreshSocial()]);
+            showToast.success('Member removed');
         } catch (err) { setErrorFrom(err, 'Failed to remove member'); throw err; }
     };
 
-    const getSpentThisMonth = () => {
-        const now = new Date();
-        return expenses.reduce((total, expense) => {
-            const d = new Date(expense.date);
-            if (
-                expense.category !== 'Income' &&
-                d.getMonth() === now.getMonth() &&
-                d.getFullYear() === now.getFullYear()
-            ) return total + Number(expense.amount);
-            return total;
-        }, 0);
+    const monthlyExpenses = useMemo(() => expensesForMonth(expenses, activeMonth), [expenses, activeMonth]);
+    const getSpentThisMonth = () => monthlyExpenses.reduce((sum, e) => sum + (e.category === 'Income' ? 0 : Number(e.amount)), 0);
+
+    useEffect(() => {
+        if (!isSignedIn || !user.isOnboarded) return;
+        const checkMonth = () => {
+            const nextMonth = monthKey();
+            if (nextMonth !== activeMonth) {
+                setActiveMonth(nextMonth);
+                bootstrapData(true);
+            }
+        };
+        const interval = setInterval(checkMonth, 30000);
+        window.addEventListener('focus', checkMonth);
+        document.addEventListener('visibilitychange', checkMonth);
+        checkMonth();
+        return () => { clearInterval(interval); window.removeEventListener('focus', checkMonth); document.removeEventListener('visibilitychange', checkMonth); };
+    }, [activeMonth, isSignedIn, user.isOnboarded, bootstrapData]);
+
+    useEffect(() => {
+        const handleMessage = event => { if (event.data?.type === 'OPEN_ACTIVITY') setCurrentScreen('activity'); };
+        navigator.serviceWorker?.addEventListener('message', handleMessage);
+        return () => navigator.serviceWorker?.removeEventListener('message', handleMessage);
+    }, []);
+
+    const logout = async () => {
+        await disablePush().catch(() => {});
+        await signOut();
     };
 
-    const logout = async () => await signOut();
+    const handleRefresh = useCallback(() => {
+        if (refreshPending.current) return refreshPending.current;
+        setIsRefreshing(true);
+        const work = Promise.all([
+            bootstrapData(true),
+            refreshNotifications(true),
+            ...(currentScreen === 'friends' && activeFriendContext.details?.id ? [syncFriendDetail(activeFriendContext.details.id)] : []),
+            ...(currentScreen === 'friends' && activeGroupContext.metadata?.id ? [syncGroupDetail(activeGroupContext.metadata.id)] : []),
+        ]).then(results => results.every(result => result !== false))
+          .finally(() => { refreshPending.current = null; setIsRefreshing(false); });
+        refreshPending.current = work;
+        return work;
+    }, [bootstrapData, refreshNotifications, currentScreen, activeFriendContext.details?.id, activeGroupContext.metadata?.id, syncFriendDetail, syncGroupDetail]);
 
     const value = {
         user,
@@ -863,11 +992,14 @@ export const AppProvider = ({ children }) => {
         currentScreen,
         setCurrentScreen,
         categories,
+        startupError,
+        activeMonth, monthlyExpenses, budgetHistory, claimMonthlyBudgetPrompt,
+        notifications, notificationError, refreshNotifications, markNotificationsRead,
         expenses,
         recurring,
         investments,
         shoppingList,
-        friends,
+        friends, socialSummary,
         groups,
         loading,
         error, clearError,
@@ -916,17 +1048,7 @@ export const AppProvider = ({ children }) => {
 
         getSpentThisMonth,
         isRefreshing,
-        handleRefresh: async () => {
-            setIsRefreshing(true);
-            await bootstrapData(true);
-            if (activeFriendContext.details?.id) {
-                await syncFriendDetail(activeFriendContext.details.id);
-            }
-            if (activeGroupContext.metadata?.id) {
-                await syncGroupDetail(activeGroupContext.metadata.id);
-            }
-            setIsRefreshing(false);
-        },
+        handleRefresh,
         activeFriendContext,
         setActiveFriendContext,
         syncFriendDetail,

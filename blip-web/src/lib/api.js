@@ -1,4 +1,6 @@
-const rawBaseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:3000').replace(/\/$/, '');
+import { monthKey } from '../utils/month';
+import { requestJson } from './request.js';
+const rawBaseUrl = (import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api' : '')).replace(/\/$/, '');
 const API_BASE_URL = rawBaseUrl.endsWith('/api') ? rawBaseUrl : `${rawBaseUrl}/api`;
 
 let tokenGetter = null;
@@ -20,50 +22,12 @@ const toQueryString = (params) => {
     return serialized ? `?${serialized}` : '';
 };
 
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-const request = async (path, options = {}, retries = 6) => { // 6 retries * 5s = 30s total patience
-    const headers = {
-        'Content-Type': 'application/json',
-        ...(options.headers || {})
-    };
-
-    if (tokenGetter) {
-        const token = await tokenGetter();
-        if (token) headers.Authorization = `Bearer ${token}`;
+const request = (path, options = {}) => {
+    if (!rawBaseUrl) {
+        console.error('VITE_API_URL is required for the production frontend.');
+        return Promise.reject(new Error('Blip’s server address is not configured. Please try again later.'));
     }
-
-    try {
-        const response = await fetch(`${API_BASE_URL}${path}`, {
-            ...options,
-            headers
-        });
-        if (!response.ok && [502, 503, 504].includes(response.status) && retries > 0) {
-            console.log(`Render waking up (Status ${response.status}). Retrying in 5s...`);
-            await sleep(5000);
-            return request(path, options, retries - 1);
-        }
-
-        const isJson = response.headers.get('content-type')?.includes('application/json');
-        const payload = isJson ? await response.json() : null;
-
-        if (!response.ok) {
-            const error = new Error(payload?.error || `Request failed with status ${response.status}`);
-            error.status = response.status;
-            error.payload = payload;
-            throw error;
-        }
-
-        return payload;
-
-    } catch (err) {
-        if (retries > 0 && (err.message === 'Failed to fetch' || err.code === 'ECONNREFUSED')) {
-            console.log("Network error (server likely asleep). Retrying in 5s...");
-            await sleep(5000);
-            return request(path, options, retries - 1);
-        }
-        throw err;
-    }
+    return requestJson(`${API_BASE_URL}${path}`, options, { getToken: tokenGetter });
 };
 
 export const api = {
@@ -71,9 +35,11 @@ export const api = {
 
     syncUser: (data) => request('/users/sync', { method: 'POST', body: JSON.stringify(data) }),
     getMe: () => request('/users/me'),
+    getBudgets: () => request(`/users/me/budgets?month=${monthKey()}`),
+    claimBudgetCheckIn: () => request('/users/me/budget-check-in', {method:'POST',body:JSON.stringify({month:monthKey()})}),
     updateBudget: (budget, phone) => request('/users/me/budget', {
         method: 'PATCH',
-        body: JSON.stringify({ budget, phone })
+        body: JSON.stringify({ budget, phone, month:monthKey() })
     }),
 
     updatePhone: (phone) => request('/users/me/phone', { method: 'PATCH', body: JSON.stringify({ phone }) }),
@@ -85,7 +51,7 @@ export const api = {
     updateExpense: (id, data) => request(`/expenses/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     deleteExpense: (id) => request(`/expenses/${id}`, { method: 'DELETE' }),
 
-    generateRecurringLogs: () => request('/recurring/logs/generate', { method: 'POST' }),
+    generateRecurringLogs: month => request('/recurring/logs/generate', { method: 'POST', body: JSON.stringify({ month }) }),
     getRecurringLogs: (month) => request(`/recurring/logs${toQueryString({ month })}`),
     markRecurringPaid: (id, amount_paid) => request(`/recurring/logs/${id}`, { method: 'PATCH', body: JSON.stringify({ amount_paid }) }),
     getRecurringTemplates: () => request('/recurring'),
@@ -107,14 +73,23 @@ export const api = {
 
     getDashboardSummary: (month) => request(`/dashboard/summary${toQueryString({ month })}`),
 
+    getNotifications: before => request(`/notifications${toQueryString({ before: before?.created_at, beforeId: before?.id })}`),
+    markNotificationsRead: ids => request('/notifications/read', { method: 'PATCH', body: JSON.stringify({ ids }) }),
+
     // Friends API methods
-    searchByPhone: (phone) => request(`/users/search?phone=${phone}`),
+    searchByPhone: (phone) => request(`/users/search${toQueryString({ phone })}`),
 
 
+    getSocialSummary: () => request('/social-summary'),
     getFriends: () => request('/friends'),
     addFriend: (friendId) => request('/friends', { method: 'POST', body: JSON.stringify({ friendId }) }),
     removeFriend: (friendId) => request(`/friends/${friendId}`, { method: 'DELETE' }),
 
+    getPushConfig: () => request('/notifications/push-config'),
+    subscribePush: subscription => request('/notifications/subscriptions', { method: 'POST', body: JSON.stringify(subscription) }),
+    unsubscribePush: endpoint => request('/notifications/subscriptions', { method: 'DELETE', body: JSON.stringify({ endpoint }) }),
+    testPush: () => request('/notifications/push-test', { method: 'POST' }),
+    getGroupTotals: (id, range = {}) => request(`/groups/${id}/totals?${new URLSearchParams(range)}`),
     getGroups: () => request('/groups'),
     createGroup: (data) => request('/groups', { method: 'POST', body: JSON.stringify(data) }),
     getGroup: (groupId) => request(`/groups/${groupId}`),
@@ -134,6 +109,6 @@ export const api = {
     getFriendBalance: (friendId) => request(`/friends/${friendId}/balance`),
     getGroupBalances: (groupId) => request(`/groups/${groupId}/balances`),
 
-    settleFriend: (friendId, amount) => request(`/friends/${friendId}/settle`, { method: 'POST', body: JSON.stringify({ amount }) }),
-    settleGroup: (groupId, toUserId, amount) => request(`/groups/${groupId}/settle`, { method: 'POST', body: JSON.stringify({ toUserId, amount }) }),
+    settleFriend: (friendId, amount, shouldLog = false, payerId) => request(`/friends/${friendId}/settle`, { method: 'POST', body: JSON.stringify({ amount, shouldLog, payerId }) }),
+    settleGroup: (groupId, toUserId, amount, shouldLog = false, payerId, receiverId) => request(`/groups/${groupId}/settle`, { method: 'POST', body: JSON.stringify({ toUserId, amount, shouldLog, payerId, receiverId }) }),
 };

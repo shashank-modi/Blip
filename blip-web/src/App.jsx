@@ -1,4 +1,5 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
+import RefreshablePage from './components/RefreshablePage';
 import { SignedIn, SignedOut, useSignIn, AuthenticateWithRedirectCallback } from '@clerk/clerk-react';
 import { Toaster } from 'react-hot-toast';
 import toast from 'react-hot-toast';
@@ -8,9 +9,9 @@ import FeedbackRenderer from './components/FeedbackRenderer';
 import Onboarding from './screens/Onboarding';
 import Home from './screens/Home';
 import Dashboard from './screens/Dashboard';
-import Investments from './screens/Investments';
 import TransactionLogs from './screens/TransactionLogs';
 import Profile from './screens/Profile';
+import Activity from './screens/Activity';
 import Friends from './screens/Friends';
 import LandingPage from './screens/LandingPage';
 import WhatsNew from './components/WhatsNew';
@@ -76,162 +77,6 @@ function GoogleSignInButton() {
                 </>
             )}
         </button>
-    );
-}
-
-function SplashScreen({ onDone }) {
-    const wordRef = useRef(null);
-    const dotRef = useRef(null);
-    const tagRef = useRef(null);
-    const overlayRef = useRef(null);
-
-    useEffect(() => {
-        const word = wordRef.current;
-        const dot = dotRef.current;
-        const tag = tagRef.current;
-        const overlay = overlayRef.current;
-        if (!word || !dot || !tag || !overlay) return;
-
-        const timers = [];
-        const after = (ms, fn) => { const t = setTimeout(fn, ms); timers.push(t); };
-
-        // 1 — word fades in, dot appears and bounces
-        after(120, () => {
-            word.style.animation = 'bWordReveal .7s cubic-bezier(.22,1,.36,1) forwards';
-            dot.style.opacity = '1';
-            dot.style.animation = 'bDotBounce 1.1s ease .85s 3';
-        });
-
-        // 2 — tagline appears
-        after(620, () => {
-            tag.style.animation = 'bTagReveal .5s ease forwards';
-        });
-
-        // 3 — tagline starts exiting
-        after(1800, () => {
-            tag.style.animation = 'bTagExit .3s ease forwards';
-        });
-
-        // 4 — dot rolls left, word width collapses
-        after(2000, () => {
-            dot.style.transition = 'transform .6s cubic-bezier(.6,0,.8,.45)';
-            dot.style.transform = 'translateX(-120px)';
-            word.style.transition = 'width .6s cubic-bezier(.6,0,.8,.45), opacity .05s ease .58s';
-            word.style.width = '0px';
-        });
-
-        // 5 — hide word and dot completely
-        after(2560, () => {
-            word.style.opacity = '0';
-            dot.style.opacity = '0';
-        });
-
-        // 6 — lime circle expands from center via clip-path
-        after(2720, () => {
-            overlay.style.opacity = '1';
-            overlay.style.transition = 'clip-path .72s cubic-bezier(.4,0,.2,1)';
-            overlay.style.clipPath = 'circle(150% at 50% 50%)';
-        });
-
-        // 7 — call onDone
-        after(3400, () => {
-            onDone?.();
-        });
-
-        return () => timers.forEach(clearTimeout);
-    }, [onDone]);
-
-    return (
-        <>
-            <style>{`
-                @keyframes bWordReveal {
-                    0%   { opacity: 0; filter: blur(8px); }
-                    100% { opacity: 1; filter: blur(0); }
-                }
-                @keyframes bTagReveal {
-                    0%   { opacity: 0; transform: translateY(4px); }
-                    100% { opacity: 0.3; transform: translateY(0); }
-                }
-                @keyframes bTagExit {
-                    0%   { opacity: 0.3; }
-                    100% { opacity: 0; }
-                }
-                @keyframes bDotBounce {
-                    0%, 100% { transform: scale(1); }
-                    50%      { transform: scale(1.2); }
-                }
-            `}</style>
-
-            <div style={{
-                position: 'absolute',
-                inset: 0,
-                background: '#202020',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 14,
-                zIndex: 9999,
-                overflow: 'hidden',
-            }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', position: 'relative', fontSize: 0 }}>
-                    <span
-                        ref={wordRef}
-                        style={{
-                            fontSize: 58,
-                            fontWeight: 800,
-                            color: '#ffffff',
-                            letterSpacing: '-2px',
-                            display: 'inline-block',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            lineHeight: 1,
-                            width: 118,
-                            opacity: 0,
-                        }}
-                    >blip</span><span
-                        ref={dotRef}
-                        style={{
-                            display: 'inline-block',
-                            width: 10,
-                            height: 10,
-                            background: '#ffffff',
-                            borderRadius: '50%',
-                            marginLeft: 0,
-                            marginBottom: 8,
-                            verticalAlign: 'middle',
-                            opacity: 0,
-                            flexShrink: 0,
-                            fontSize: 0,
-                        }}
-                    /></div>
-                <div
-                    ref={tagRef}
-                    style={{
-                        fontSize: 11,
-                        fontWeight: 500,
-                        letterSpacing: '3px',
-                        textTransform: 'uppercase',
-                        color: '#ffffff',
-                        opacity: 0,
-                    }}
-                >
-                    count on us, to count for you
-                </div>
-
-                <div
-                    ref={overlayRef}
-                    style={{
-                        position: 'absolute',
-                        inset: 0,
-                        background: '#c9f158',
-                        clipPath: 'circle(0% at 50% 50%)',
-                        opacity: 0,
-                        pointerEvents: 'none',
-                    }}
-                />
-            </div>
-        </>
     );
 }
 
@@ -494,213 +339,23 @@ function SignInPage({ onBack }) {
     );
 }
 
-function PullToRefreshIndicator({ progress, isRefreshing, isThresholdMet }) {
-    return (
-        <div
-            style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: 100,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                pointerEvents: 'none',
-                zIndex: 10,
-            }}
-        >
-            <motion.div
-                initial={false}
-                animate={{
-                    opacity: isRefreshing ? 1 : Math.min(progress * 1.2, 1),
-                    y: isRefreshing ? 0 : -18 + progress * 18,
-                    scale: isRefreshing
-                        ? 1
-                        : isThresholdMet
-                            ? 1.08
-                            : 0.85 + progress * 0.25,
-                }}
-                transition={{
-                    type: 'spring',
-                    stiffness: 280,
-                    damping: 22,
-                }}
-                style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    position: 'relative',
-                    background: 'rgba(255,255,255,0.65)',
-                    backdropFilter: 'blur(14px)',
-                    WebkitBackdropFilter: 'blur(14px)',
-                    boxShadow: isThresholdMet
-                        ? '0 8px 28px rgba(201,241,88,0.35)'
-                        : '0 6px 18px rgba(0,0,0,0.10)',
-                }}
-            >
-                {/* Soft expanding glow (only when threshold met) */}
-                <motion.div
-                    animate={
-                        isThresholdMet && !isRefreshing
-                            ? { scale: [1, 1.4, 1], opacity: [0.4, 0.15, 0.4] }
-                            : { scale: 1, opacity: 0 }
-                    }
-                    transition={{
-                        duration: 1.2,
-                        repeat: Infinity,
-                        ease: 'easeInOut',
-                    }}
-                    style={{
-                        position: 'absolute',
-                        width: 40,
-                        height: 40,
-                        borderRadius: '50%',
-                        background: '#c9f158',
-                        filter: 'blur(12px)',
-                        zIndex: 0,
-                    }}
-                />
-
-                {/* Progress arc */}
-                <motion.svg
-                    width="30"
-                    height="30"
-                    viewBox="0 0 24 24"
-                    style={{ position: 'absolute', zIndex: 1 }}
-                >
-                    <motion.circle
-                        cx="12"
-                        cy="12"
-                        r="9"
-                        stroke="#c9f158"
-                        strokeWidth="2.5"
-                        fill="none"
-                        strokeLinecap="round"
-                        style={{
-                            pathLength: isRefreshing ? 0.28 : progress,
-                            rotate: -90,
-                            transformOrigin: '50% 50%',
-                        }}
-                        animate={
-                            isRefreshing
-                                ? { rotate: 270 }
-                                : { rotate: -90 }
-                        }
-                        transition={
-                            isRefreshing
-                                ? {
-                                    repeat: Infinity,
-                                    duration: 1,
-                                    ease: 'linear',
-                                }
-                                : {
-                                    type: 'spring',
-                                    stiffness: 120,
-                                }
-                        }
-                    />
-                </motion.svg>
-
-                {/* Center dot (blip identity) */}
-                <motion.div
-                    animate={
-                        isRefreshing
-                            ? { scale: [1, 0.65, 1] }
-                            : isThresholdMet
-                                ? { scale: [1, 1.2, 1] }
-                                : { scale: 1 }
-                    }
-                    transition={{
-                        duration: isRefreshing ? 0.9 : 0.3,
-                        repeat: isRefreshing ? Infinity : 0,
-                        ease: 'easeInOut',
-                    }}
-                    style={{
-                        width: 9,
-                        height: 9,
-                        borderRadius: '50%',
-                        background: isThresholdMet ? '#c9f158' : '#202020',
-                        zIndex: 2,
-                    }}
-                />
-            </motion.div>
-        </div>
-    );
-}
-
 // ─── App Shell ────────────────────────────────────────────────────────────────
 function AppShell() {
-    const { currentScreen, showWhatsNew, dismissWhatsNew, loading, error, clearError, isRefreshing, handleRefresh } = useApp();
-
-    const scrollRef = useRef(null);
-    const startY = useRef(0);
-    const pulling = useRef(false);
-
-    const [pullY, setPullY] = useState(0);
-    const [isThresholdMet, setIsThresholdMet] = useState(false);
-
-    const threshold = 70; // Slightly shorter pull for a snappier feel
-    const dragFactor = 0.35;
-
-    useEffect(() => {
-        const el = scrollRef.current;
-        if (!el) return;
-
-        const onTouchStart = (e) => {
-            if (isRefreshing || el.scrollTop > 0) return;
-            startY.current = e.touches[0].clientY;
-            pulling.current = true;
-        };
-
-        const onTouchMove = (e) => {
-            if (!pulling.current || isRefreshing) return;
-            const delta = e.touches[0].clientY - startY.current;
-
-            if (delta > 0 && el.scrollTop <= 0) {
-                if (e.cancelable) e.preventDefault();
-                // Minimal resistance math
-                const move = Math.pow(delta, 0.8) * dragFactor;
-                setPullY(move);
-                setIsThresholdMet(move > threshold);
-            } else {
-                pulling.current = false;
-            }
-        };
-
-        const onTouchEnd = async () => {
-            if (!pulling.current) return;
-            pulling.current = false;
-
-            if (pullY > threshold) {
-                await handleRefresh?.();
-            }
-            setPullY(0);
-            setIsThresholdMet(false);
-        };
-
-        el.addEventListener('touchstart', onTouchStart, { passive: true });
-        el.addEventListener('touchmove', onTouchMove, { passive: false });
-        el.addEventListener('touchend', onTouchEnd);
-
-        return () => {
-            el.removeEventListener('touchstart', onTouchStart);
-            el.removeEventListener('touchmove', onTouchMove);
-            el.removeEventListener('touchend', onTouchEnd);
-        };
-    }, [handleRefresh, isRefreshing, pullY]);
+    const { currentScreen, showWhatsNew, dismissWhatsNew, loading, startupError, bootstrapData, error, clearError, isRefreshing, handleRefresh } = useApp();
 
     if (loading) return <LoadingScreen />;
-
-    // Animation progress (0 to 1)
-    const progress = Math.min(pullY / threshold, 1);
+    if (startupError) return <main style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', padding: 24, background: 'var(--bg)' }}>
+        <section role="alert" style={{ maxWidth: 360, background: '#202020', color: '#fff', padding: 32, borderRadius: 28 }}>
+            <h1 style={{ fontSize: 25, margin: '0 0 16px' }}>Let’s reconnect<span style={{ color: '#c9f158' }}>.</span></h1>
+            <p style={{ fontSize: 14, lineHeight: 1.6, color: '#ddd' }}>{startupError}</p>
+            <button onClick={() => bootstrapData()} style={{ border: 0, borderRadius: 16, padding: '14px 24px', background: '#c9f158', color: '#202020', fontWeight: 700, cursor: 'pointer', marginTop: 12 }}>Try again</button>
+        </section>
+    </main>;
 
     return (
         <>
             <Toaster
+                containerStyle={{zIndex:12000}}
                 position="bottom-center"
                 toastOptions={{
                     duration: 2500,
@@ -733,32 +388,7 @@ function AppShell() {
             />
             <FeedbackRenderer />
 
-            <div className="pages" style={{ background: 'var(--bg)', overflow: 'hidden' }}>
-                <PullToRefreshIndicator
-                    progress={progress}
-                    isRefreshing={isRefreshing}
-                    isThresholdMet={pullY > threshold}
-                />
-
-                <motion.main
-                    ref={scrollRef}
-                    className="screen"
-                    animate={{
-                        y: isRefreshing ? 60 : pullY,
-                    }}
-                    transition={{
-                        type: 'spring',
-                        stiffness: 400,
-                        damping: 35,
-                        mass: 0.8
-                    }}
-                    style={{
-                        background: 'var(--bg)',
-                        position: 'relative',
-                        zIndex: 1,
-                        willChange: 'transform',
-                    }}
-                >
+            <RefreshablePage className={`view-${currentScreen}`} resetKey={currentScreen} onRefresh={handleRefresh} disabled={isRefreshing || currentScreen === 'onboarding' || showWhatsNew}>
                     {error && (
                         <div style={{
                             margin: '12px 16px',
@@ -781,12 +411,11 @@ function AppShell() {
                     {currentScreen === 'onboarding' && <Onboarding />}
                     {currentScreen === 'home' && <Home />}
                     {currentScreen === 'friends' && <Friends />}
+                    {currentScreen === 'activity' && <Activity />}
                     {currentScreen === 'dashboard' && <Dashboard />}
-                    {currentScreen === 'investments' && <Investments />}
                     {currentScreen === 'logs' && <TransactionLogs />}
                     {currentScreen === 'profile' && <Profile />}
-                </motion.main>
-            </div>
+            </RefreshablePage>
 
             <BottomNav />
             <AnimatePresence>
@@ -800,7 +429,6 @@ function AppShell() {
 
 // ─── Root App ─────────────────────────────────────────────────────────────────
 function App() {
-    const [showSplash, setShowSplash] = useState(true);
     const [viewLanding, setViewLanding] = useState(() => {
         return !localStorage.getItem('blip_visited_direct');
     });
@@ -849,10 +477,6 @@ function App() {
         };
     }, []);
 
-    useEffect(() => {
-        const timer = setTimeout(() => setShowSplash(false), 3300);
-        return () => clearTimeout(timer);
-    }, []);
 
     if (window.location.pathname === '/sso-callback') {
         return <AuthenticateWithRedirectCallback />;
@@ -874,14 +498,10 @@ function App() {
                 {viewLanding ? (
                 <LandingPage onGetStarted={handleEnterApp} />
             ) : (
-                <>
-                    {showSplash && <SplashScreen />}
-                    {!showSplash && <SignInPage onBack={handleBackToLanding} />}
-                </>
+                <SignInPage onBack={handleBackToLanding} />
             )}
             </SignedOut>
             <SignedIn>
-                {showSplash && <SplashScreen />}
                 <AppShell />
             </SignedIn>
         </>

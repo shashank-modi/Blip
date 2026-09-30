@@ -1,0 +1,55 @@
+import RefreshablePage from '../src/components/RefreshablePage';
+import SaveFeedback from '../src/components/SaveFeedback';
+import Home from '../src/screens/Home';
+import Dashboard from '../src/screens/Dashboard';
+import TransactionLogs from '../src/screens/TransactionLogs';
+import Onboarding from '../src/screens/Onboarding';
+import Profile from '../src/screens/Profile';
+import { monthKey } from '../src/utils/month';
+// Local-only UI fixtures. Never contacts a backend or authentication service.
+import { useState, useRef, useCallback } from 'react';
+import { createRoot } from 'react-dom/client';
+import { AppContext } from '../src/store/AppContext';
+import Friends from '../src/screens/Friends';
+import Activity from '../src/screens/Activity';
+import BottomNav from '../src/components/BottomNav';
+import PhoneInput from '../src/components/PhoneInput';
+import { api } from '../src/lib/api';
+import '../src/index.css';
+import '../src/polish.css';
+const me = { id: 'a', name: 'Alex Morgan', email:'alex@example.test', phone:'+9779841234567', budget: 12000, isOnboarded: true };
+const members = [{ id:'a', name:'Alex', initials:'AL' },{id:'b',name:'Sam',initials:'SA'},{id:'c',name:'Riya',initials:'RI'}];
+const owingFixture=new URLSearchParams(window.location.search).has('owing');
+const friends = [{ ...members[1], balance: owingFixture ? -850 : 850 },{...members[2],balance:-420}];
+const group = { id:'trip', name:'Pokhara weekend', icon:'🏔️', type:'trip', members, balance:850, totalSpent:4560 };
+const seed = { id:'e1',desc:'Dinner by the lake',amount:1260,paidBy:'a',paidByName:'You',date:new Date().toISOString(),type:'expense',isPaid:false,yourShare:0,splits:[{userId:'a',name:'Alex',amount:420,paidAmount:420,isPaid:true},{userId:'b',name:'Sam',amount:420,paidAmount:120,isPaid:false},{userId:'c',name:'Riya',amount:420,paidAmount:0,isPaid:false}] };
+const totals = {total:4560,count:4,members:members.map((m,i)=>({...m,paid:[2700,1200,660][i],share:1520,settlements_paid:[0,120,0][i],settlements_received:[120,0,0][i],balance:[1060,-200,-860][i]}))};
+api.getPushConfig = async () => ({ enabled:false });
+api.subscribePush = async () => ({ success:true });
+api.getNotifications = async () => [];
+api.searchByPhone = async () => members[1];
+function Preview() {
+    const refreshFinish=useRef(null);
+    const [previewRefreshing,setPreviewRefreshing]=useState(false);
+    const refreshPreview=new URLSearchParams(window.location.search).has('refreshPreview');
+    const simulatePull=()=>{const el=document.querySelector('main');const touch=y=>new Touch({identifier:1,target:el,clientX:100,clientY:y});for(const [type,y] of [['touchstart',80],['touchmove',220],['touchend',220]])el.dispatchEvent(new TouchEvent(type,{bubbles:true,cancelable:true,touches:type==='touchend'?[]:[touch(y)]}));};
+    const previewRefresh=()=>new Promise(resolve=>{setPreviewRefreshing(true);refreshFinish.current=()=>{setPreviewRefreshing(false);resolve(!failWrites);};});
+    const [screen,setScreen]=useState(new URLSearchParams(window.location.search).get('screen') || 'friends');
+    const [expenses,setExpenses]=useState([{...seed,createdAt:new Date(Date.now()-2000).toISOString()},{...seed,id:'third-party',date:'2026-08-01T12:00:00Z',createdAt:new Date(Date.now()-1000).toISOString(),desc:'Taxi paid by Riya',paidBy:'c',paidByName:'Riya',yourShare:420},...(new URLSearchParams(window.location.search).has('payment')?[{id:'p1',type:'payment',desc:'Payment from Sam',amount:120,paidBy:'b',paidByName:'Sam',paidTo:'a',date:new Date().toISOString(),createdAt:new Date(Date.now()-500).toISOString(),splits:[]}]:[])]);
+    const [phone,setPhone]=useState('+9779841234567');
+    const [notifications,setNotifications]=useState([{ id:'n1',actor_id:'b',actor_name:'Sam',type:'expense',message:'Sam added “Taxi to the lake”.',created_at:new Date().toISOString(),read_at:null,metadata:{amount:900,scope:'shared'} },{id:'n2',actor_id:'a',actor_name:'Alex',type:'settlement',message:'Alex recorded a settlement.',created_at:new Date().toISOString(),read_at:new Date().toISOString(),metadata:{amount:120,scope:'shared'}}]);
+    api.getGroupTotals=async()=>totals;
+    const groupData={metadata:group,expenses,balances:[{id:'b',name:'Sam',initials:'SA',net:850}],totals};
+    const save=async(id,data)=>{ window.__lastExpense=data;setExpenses(previous=>[{...seed,id:crypto.randomUUID(),desc:data.description,amount:data.amount,date:data.date || new Date().toISOString(),createdAt:new Date().toISOString(),splits:data.splits},...previous]); };
+    const noop=async()=>true;
+    const failWrites = new URLSearchParams(window.location.search).has('failWrites');
+    const walletExpenses=new URLSearchParams(window.location.search).has('emptyWallet') ? [] : [{id:'w1',description:'Coffee with Sam',amount:240,category:'Food',date:new Date().toISOString()},{id:'w2',description:'Weekly groceries',amount:1820,category:'Shopping',date:new Date().toISOString()},{id:'w3',description:'Taxi home',amount:350,category:'Transport',date:new Date().toISOString()},{id:'w4',description:'Dinner at the lake',amount:940,category:'Food',date:new Date().toISOString()},{id:'w5',description:'Freelance project',amount:6000,category:'Income',date:new Date().toISOString()}];
+    const promptShown=useRef(false);
+    const claimBudget=useCallback(async()=>{if(promptShown.current||!new URLSearchParams(window.location.search).has('budgetNudge'))return false;promptShown.current=true;return true;},[]);
+    const value={ user:me,claimMonthlyBudgetPrompt:claimBudget,budgetHistory:[{month:monthKey(),amount:12000}],version:'3.0.0',expenses:walletExpenses,monthlyExpenses:walletExpenses,activeMonth:monthKey(),recurring:[],shoppingList:[],getSpentThisMonth:()=>3350,updateUserBudget:noop,addExpenseNLP:noop,markRecurringPaid:noop,deleteRecurring:noop,updateRecurringItem:noop,addRecurring:async()=>!failWrites,deleteExpense:noop,updateExpense:async()=>!failWrites,addIncome:noop,addShoppingItem:noop,updateShoppingItem:noop,deleteShoppingItem:noop,updatePhone:noop,logout:noop,completeOnboarding:async()=>{if(failWrites)throw new Error('Preview save failed. Please retry.');setScreen('friends');},friends,groups:[group],notifications,notificationError:'',refreshNotifications:noop,markNotificationsRead:async ids=>setNotifications(previous=>previous.map(item=>ids.includes(item.id)?{...item,read_at:new Date().toISOString()}:item)),currentScreen:screen,setCurrentScreen:setScreen,refreshSocial:noop,searchByPhone:api.searchByPhone,addFriend:noop,removeFriend:noop,createGroup:noop,activeGroupContext:groupData,syncGroupDetail:async()=>groupData,activeFriendContext:{details:friends[0],expenses,balance:friends[0].balance},syncFriendDetail:noop,addFriendExpense:save,addGroupExpense:save,editSocialExpense:save,deleteSocialExpense:noop,deleteSocialPayment:noop,settleFriend:async(...args)=>{window.__lastPayment=args;if(failWrites)throw new Error('Could not save. Try again.');},settleGroup:async(...args)=>{window.__lastPayment=args;if(failWrites)throw new Error('Could not save. Try again.');},deleteGroup:noop,updateGroupSettings:noop,addGroupMember:noop,removeGroupMember:noop };
+    return <AppContext.Provider value={value}><RefreshablePage className={`view-${screen}`} resetKey={screen} onRefresh={refreshPreview?previewRefresh:noop}>{screen==='friends'?<Friends/>:screen==='activity'?<Activity/>:screen==='profile'?<Profile/>:screen==='home'?<Home/>:screen==='dashboard'?<Dashboard/>:screen==='logs'?<TransactionLogs/>:screen==='onboarding'?<Onboarding/>:null}</RefreshablePage>{refreshPreview && <button style={{position:"fixed",bottom:95,right:16,zIndex:100,padding:12}} onClick={previewRefreshing?()=>refreshFinish.current():simulatePull}>{previewRefreshing?"Finish test refresh":"Test pull gesture"}</button>}<BottomNav/>{new URLSearchParams(window.location.search).has('feedback') && <SaveFeedback show amount={420} title="Expense added"/>}</AppContext.Provider>;
+
+}
+const root = import.meta.hot?.data.root || createRoot(document.getElementById('root'));
+if (import.meta.hot) import.meta.hot.data.root = root;
+root.render(<Preview/>);

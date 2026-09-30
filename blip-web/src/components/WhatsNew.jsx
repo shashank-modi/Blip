@@ -4,27 +4,9 @@ import { ChevronRight, X, Sparkles } from 'lucide-react';
 
 // ── THE UPDATES DATA ──
 const UPDATES = [
-    {
-        id: 1,
-        title: "Global Settlements",
-        desc: "Settle all debts with a friend across every group in one tap. Your Gym and Goa trip balances finally meet in one place.",
-        icon: "🤝",
-        color: "#c9f158"
-    },
-    {
-        id: 2,
-        title: "Itemized Activity",
-        desc: "Every group now has a proper ledger. See exactly when 'Shadow' payments happen and which bills are officially cleared.",
-        icon: "📜",
-        color: "#6366f1"
-    },
-    {
-        id: 3,
-        title: "New Versioning",
-        desc: "We'll now let you know whenever we push a fresh update so you never miss a feature.",
-        icon: "🚀",
-        color: "#FF7E5F"
-    }
+    { id: 1, title: "Your circle, made simpler.", desc: "Clear actions to add friends and create groups. Separate bill names and amounts, with equal splits, exact amounts, or shares.", icon: "🤝", color: "#c9f158" },
+    { id: 2, title: "Every share. Every settlement.", desc: "See trip totals and what each person paid. Settle a little or all at once, and follow every update in Activity.", icon: "🧾", color: "#e9efdb" },
+    { id: 3, title: "More room for your money.", desc: "Meet the refreshed Wallet, dashboard, and transaction history — now designed for both your phone and desktop.", icon: "✨", color: "#e9efdb" },
 ];
 
 export default function WhatsNew({ onClose }) {
@@ -60,7 +42,7 @@ export default function WhatsNew({ onClose }) {
                         </div>
 
                         <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <Sparkles size={12} /> What's New
+                            <Sparkles size={12} /> What’s new · 3.0.0
                         </div>
 
                         <h2 style={{ fontSize: 28, fontWeight: 900, color: '#202020', marginBottom: 12, lineHeight: 1.1 }}>

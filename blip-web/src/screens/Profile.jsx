@@ -1,6 +1,9 @@
+import PageHeader from '../components/PageHeader';
+import PhoneInput from '../components/PhoneInput';
+import { phoneNumber } from '../utils/phone';
+import BottomSheet from '../components/BottomSheet';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom'; // Add this
-import { useUser, useClerk } from '@clerk/clerk-react';
 import { useApp } from '../store/AppContext';
 import EditRecurringSheet from '../components/EditRecurringSheet';
 import FeedbackSheet from '../components/FeedbackSheet';
@@ -150,7 +153,7 @@ function AutopayScreen({ recurring, onBack, onEdit, onDelete }) {
         <>
             <div className="top-bar" style={{ position: 'relative', justifyContent: 'center' }}>
                 <div className="icon-btn" onClick={onBack} style={{ position: 'absolute', left: 20 }}><ChevronLeft size={20} /></div>
-                <div className="greeting" style={{ fontSize: 20, fontWeight: 800 }}>Auto Pay</div>
+                <div className="greeting" style={{ fontSize: 20, fontWeight: 800 }}>Scheduled payments</div>
             </div>
             <div className="profile-content" style={{ padding: '20px' }}>
                 <LedgerBox title="Active Schedules" rows={recurring.map(rec => ({
@@ -163,7 +166,7 @@ function AutopayScreen({ recurring, onBack, onEdit, onDelete }) {
                             <span style={{ backgroundColor: '#c9f158', color: '#ffffff', fontWeight: 700, fontSize: '10px', padding: '2px 6px', borderRadius: 99 }}>{rec.category}</span>
                         </div>
                     ),
-                    value: `₹${formatCurrency(rec.amount)}`,
+                    value: `Rs. ${formatCurrency(rec.amount)}`,
                     onClick: () => onEdit(rec),
                     action: <div onClick={(e) => { e.stopPropagation(); onDelete(rec.id); }} style={{ padding: '8px', marginLeft: '10px' }}><Trash2 size={20} color="var(--danger)" /></div>
                 }))} />
@@ -173,14 +176,16 @@ function AutopayScreen({ recurring, onBack, onEdit, onDelete }) {
 }
 
 export default function Profile() {
-    const { user: clerkUser } = useUser();
-    const { signOut } = useClerk();
-    const { user, recurring, deleteRecurring, updateRecurringItem, updateUserBudget, updatePhone, version } = useApp();
+    const { user, budgetHistory = [], recurring, deleteRecurring, updateRecurringItem, updateUserBudget, updatePhone, version, logout } = useApp();
 
     const [modalConfig, setModalConfig] = useState({ isOpen: false, title: '', message: '', isPrompt: false, defaultValue: '', onConfirm: () => { } });
     const [editingRecurring, setEditingRecurring] = useState(null);
     const [showAutopay, setShowAutopay] = useState(false);
+    const [editingPhone, setEditingPhone] = useState(false);
+    const [phoneDraft, setPhoneDraft] = useState('');
+    const [savingPhone, setSavingPhone] = useState(false);
     const [showFeedback, setShowFeedback] = useState(false);
+    const [showBudgetHistory,setShowBudgetHistory]=useState(false);
 
     const openModal = (cfg) => setModalConfig({ ...cfg, isOpen: true });
     const closeModal = () => setModalConfig(p => ({ ...p, isOpen: false }));
@@ -193,17 +198,7 @@ export default function Profile() {
         onConfirm: (v) => { if (v && !isNaN(Number(v)) && Number(v) > 0) updateUserBudget(v); }
     });
 
-    const handleEditPhone = () => openModal({
-        title: 'Phone Number',
-        message: 'Edit your phone number',
-        isPrompt: true,
-        defaultValue: user.phone,
-        onConfirm: (v) => { if (v && v.length === 10) updatePhone(v); }
-    });
-
-    const resetBudgetPrompts = () => {
-        Object.keys(localStorage).filter(k => k.startsWith('blip_budget_prompt_')).forEach(k => localStorage.removeItem(k));
-    };
+    const handleEditPhone = () => { setPhoneDraft(user.phone || ''); setEditingPhone(true); };
 
     const handleShareApp = async () => {
         const shareData = {
@@ -251,7 +246,19 @@ export default function Profile() {
 
     return (
         <>
-            <div className="top-bar" style={{ justifyContent: 'center' }}><div className="greeting" style={{ fontSize: 20, fontWeight: 800 }}>Profile</div></div>
+            <BottomSheet isOpen={showBudgetHistory} onClose={()=>setShowBudgetHistory(false)} title="Monthly budget history"><p className="field-help">Each month keeps its own budget. Changing this month won’t rewrite earlier months. History starts when monthly tracking was enabled.</p>{budgetHistory.map(item=><div className="budget-history-row" key={item.month}><span>{new Date(`${item.month}-01T12:00:00`).toLocaleDateString('en-IN',{month:'long',year:'numeric'})}</span><strong>Rs. {formatCurrency(item.amount)}</strong></div>)}{!budgetHistory.length&&<p className="field-help">Your saved monthly budgets will appear here.</p>}</BottomSheet>
+            <BottomSheet isOpen={editingPhone} onClose={() => setEditingPhone(false)} title="Phone number">
+                <p className="field-help">Choose your country, then enter your phone number. Friends can use it to find you on Blip.</p>
+                <PhoneInput value={phoneDraft} onChange={setPhoneDraft} />
+                <button className="button-primary" disabled={!phoneNumber(phoneDraft) || savingPhone} onClick={async () => {
+                    setSavingPhone(true);
+                    try { await updatePhone(phoneNumber(phoneDraft)); setEditingPhone(false); }
+                    catch { /* App context displays the error and preserves the draft. */ }
+                    finally { setSavingPhone(false); }
+                }} style={{ marginTop: 20, width: '100%' }}>{savingPhone ? 'Saving…' : 'Save phone number'}</button>
+            </BottomSheet>
+
+            <PageHeader title="Profile" subtitle="Your details. Your preferences."/>
             <div className="profile-content" style={{ padding: '0 20px' }}>
                 <div style={{ display: 'flex', justifyContent: 'center', margin: '32px 0' }}>
                     <div style={{ width: 120, height: 120, borderRadius: '50%', background: 'var(--lime)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40, fontWeight: 800, color: '#202020', border: '4px solid #FFFFFF', boxShadow: '0 10px 25px rgba(201, 241, 88, 0.3)' }}>{initials}</div>
@@ -259,9 +266,9 @@ export default function Profile() {
 
                 <LedgerBox title="Personal Info" rows={[
                     { icon: <UserPen size={22} />, label: 'Name', sub: user.name || 'User', noChevron: true },
-                    { icon: <Mail size={22} />, label: 'Email', sub: user.email || clerkUser?.primaryEmailAddress?.emailAddress || 'Not set', noChevron: true },
+                    { icon: <Mail size={22} />, label: 'Email', sub: user.email || 'Not set', noChevron: true },
                     { icon: <Phone size={22} />, label: 'Phone', sub: user.phone || 'Not set', onClick: handleEditPhone },
-                    { icon: <Wallet size={22} />, label: 'Monthly Budget', sub: 'Current spending limit', value: `₹${formatCurrency(user.budget || 0)}`, onClick: handleEditBudget }
+                    { icon: <Wallet size={22} />, label: 'Monthly Budget', sub: 'Current spending limit', value: `Rs. ${formatCurrency(user.budget || 0)}`, onClick: handleEditBudget }
                 ]} />
 
                 <LedgerBox
@@ -269,17 +276,15 @@ export default function Profile() {
                     rows={[
                         {
                             icon: <Repeat size={18} />,
-                            label: 'Manage Auto Pay',
+                            label: 'Scheduled payments',
                             sub: `${recurring.length} active schedules`,
                             onClick: () => setShowAutopay(true)
                         },
                         {
                             icon: <RotateCcw size={18} />,
-                            label: 'Reset Budget Prompt',
-                            sub: 'Show monthly check-in again',
-                            onClick: resetBudgetPrompts,
-                            noChevron: true,
-                            action: <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--indigo)', background: 'var(--bg)', padding: '5px 12px', borderRadius: '8px' }}>RESET</div>
+                            label: 'Budget history',
+                            sub: 'Your spending limit, month by month',
+                            onClick: () => setShowBudgetHistory(true)
                         }
                     ]}
                 />
@@ -309,7 +314,7 @@ export default function Profile() {
                 />
 
                 <LedgerBox title="Privacy & Security" rows={[
-                    { icon: <LogOut size={18} />, label: 'Sign Out', danger: true, onClick: () => openModal({ title: 'Sign Out', message: 'Are you sure you want to sign out of Blip?', onConfirm: () => signOut() }), noChevron: true }
+                    { icon: <LogOut size={18} />, label: 'Sign Out', danger: true, onClick: () => openModal({ title: 'Sign Out', message: 'Are you sure you want to sign out of Blip?', onConfirm: () => logout() }), noChevron: true }
                 ]} />
                 <div style={{ height: 40 }} />
             </div>

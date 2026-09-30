@@ -3,40 +3,24 @@ import { requireAuth, getUserId } from '../middleware/auth.js';
 import { query, pool } from '../db/client.js';
 import { toTitleCase } from '../utils/format.js';
 
+import { transaction } from '../db/transaction.js';
+import { cents } from '../utils/money.js';
 const router = express.Router();
 router.use(requireAuth);
 
 router.post('/logs/generate', async (req, res, next) => {
     try {
         const userId = getUserId(req);
-        // Current month first day (yyyy-mm-01)
         const now = new Date();
-        const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-
-        // Get all recurring templates for user
-        const templates = await query('SELECT * FROM recurring_expenses WHERE user_id = $1', [userId]);
-
-        for (const t of templates.rows) {
-            // Check if log exists for this month
-            const logCheck = await query(
-                'SELECT id FROM recurring_logs WHERE recurring_id = $1 AND user_id = $2 AND month = $3',
-                [t.id, userId, monthStr]
-            );
-
-            if (logCheck.rows.length === 0) {
-                try {
-                    await query(
-                        'INSERT INTO recurring_logs (recurring_id, user_id, month, amount_paid) VALUES ($1, $2, $3, $4)',
-                        [t.id, userId, monthStr, t.amount]
-                    );
-                } catch (insertErr) {
-                    // 23503 = foreign_key_violation — template was deleted between SELECT and INSERT
-                    // This is a benign race condition; skip this entry silently
-                    if (insertErr.code === '23503') continue;
-                    throw insertErr;
-                }
-            }
-        }
+        const month = req.body.month || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return res.status(400).json({ error: 'Invalid month' });
+        const monthStr = `${month}-01`;
+        await transaction(async query => {
+            await query('SELECT pg_advisory_xact_lock(hashtext($1))', [`recurring:${userId}:${month}`]);
+            await query(`INSERT INTO recurring_logs (recurring_id, user_id, month, amount_paid)
+                SELECT r.id, r.user_id, $2::date, r.amount FROM recurring_expenses r WHERE r.user_id = $1
+                AND NOT EXISTS (SELECT 1 FROM recurring_logs l WHERE l.recurring_id = r.id AND l.user_id = $1 AND l.month = $2::date)`, [userId, monthStr]);
+        });
         res.json({ success: true, month: monthStr });
     } catch (err) {
         next(err);
@@ -47,7 +31,7 @@ router.get('/logs', async (req, res, next) => {
     try {
         const userId = getUserId(req);
         const { month } = req.query;
-        if (!month) return res.status(400).json({ error: 'month query param required (YYYY-MM)' });
+        if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month || '')) return res.status(400).json({ error: 'Valid month required (YYYY-MM)' });
 
         const monthStr = `${month}-01`;
 
@@ -69,7 +53,7 @@ router.get('/logs', async (req, res, next) => {
 router.patch('/logs/:id', async (req, res, next) => {
     let client;
     try {
-        const { amount_paid } = req.body;
+        const amount_paid = cents(req.body.amount_paid) / 100;
         const userId = getUserId(req);
 
         client = await pool.connect();
@@ -79,14 +63,14 @@ router.patch('/logs/:id', async (req, res, next) => {
         const logResult = await client.query(
             `UPDATE recurring_logs
              SET amount_paid = $1, paid_at = NOW()
-             WHERE id = $2 AND user_id = $3
+             WHERE id = $2 AND user_id = $3 AND paid_at IS NULL
              RETURNING *`,
             [amount_paid, req.params.id, userId]
         );
 
         if (logResult.rows.length === 0) {
             await client.query('ROLLBACK');
-            return res.status(404).json({ error: 'Not found' });
+            return res.status(409).json({ error: 'Payment already recorded or no longer available' });
         }
         const log = logResult.rows[0];
 

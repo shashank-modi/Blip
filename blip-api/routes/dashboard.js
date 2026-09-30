@@ -15,6 +15,7 @@ router.get('/summary', async (req, res, next) => {
         const now = new Date();
         const month = req.query.month ||
             `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return res.status(400).json({ error: 'Invalid month' });
         const monthStr = `${month}-01`;
 
         // 1. Get user budget

@@ -40,7 +40,7 @@ export default function EditRecurringSheet({ isOpen, onClose, item, onSave }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div style={{ display: 'flex', gap: '12px' }}>
                     <div className="form-field" style={{ flex: 1 }}>
-                        <div className="form-label">Amount (₹)</div>
+                        <div className="form-label">Amount (Rs. )</div>
                         <input
                             type="number"
                             className="form-input"
