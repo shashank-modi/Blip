@@ -263,6 +263,8 @@ test('social routes and migration against isolated PostgreSQL', { skip: !url }, 
             await (await import('../utils/push.js')).flushPush();
             assert.equal(delivered.length, count + 1);
             assert.match(delivered.at(-1).payload.body, /Breakfast/);
+            assert.equal(delivered.at(-1).payload.title, "Expense added");
+            assert.match(delivered.at(-1).payload.body, /Your share:/);
             assert.equal(delivered.at(-1).payload.url, '/?tab=activity');
             assert.ok((await pool.query('SELECT delivered_at FROM push_deliveries')).rows.every(row => row.delivered_at));
             assert.equal((await request('/notifications/subscriptions', {endpoint:subscription.endpoint},'b','DELETE')).status,200);

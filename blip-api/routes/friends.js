@@ -394,7 +394,7 @@ router.post('/groups/:id/members', async (req, res, next) => {
             if (!(await query('SELECT 1 FROM friendships WHERE user_id=$1 AND friend_id=$2',[actorId,userId])).rows.length) fail('Add this person as a friend first',403);
             const person=(await query('SELECT name FROM users WHERE id=$1',[userId])).rows[0];
             await query('INSERT INTO group_members (group_id,user_id) VALUES ($1,$2)',[id,userId]);
-            await notify(query,actorId,[...members,userId],'group_member_added',`added ${person.name} to “${group.name}”.`,{groupId:id,scope:'shared'});
+            await notify(query,actorId,[...members,userId],'group_member_added',`added ${person.name} to “${group.name}”.`,{groupId:id,memberId:userId,memberName:person.name,scope:'shared'});
         });
         res.json({success:true});
     } catch (err) { next(err); }
@@ -411,7 +411,7 @@ router.delete('/groups/:id/members/:userId', async (req, res, next) => {
             await requireSettledGroup(query,id,userId);
             const person=(await query('SELECT name FROM users WHERE id=$1',[userId])).rows[0];
             await query('DELETE FROM group_members WHERE group_id=$1 AND user_id=$2',[id,userId]);
-            await notify(query,actorId,members,'group_member_removed',`removed ${person.name} from “${group.name}”.`,{groupId:id,scope:'shared'});
+            await notify(query,actorId,members,'group_member_removed',`removed ${person.name} from “${group.name}”.`,{groupId:id,memberId:userId,memberName:person.name,scope:'shared'});
         });
         res.json({success:true});
     } catch (err) { next(err); }

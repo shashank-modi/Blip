@@ -32,7 +32,7 @@ export default function Activity() {
             const Icon = item.type.startsWith('settlement') ? ArrowLeftRight : item.metadata?.scope === 'wallet' ? Wallet : item.type.startsWith('group') ? Users : Receipt;
             const message = item.actor_id === user.id && item.actor_name && item.message.startsWith(item.actor_name) ? `You${item.message.slice(item.actor_name.length)}` : item.message;
             return <div key={item.id}>{showDay && <div className="activity-day">{day}</div>}<article className="activity-entry">
-                <div className="activity-icon"><Icon size={18} /></div><div style={{ flex: 1, minWidth: 0 }}><p>{message.replaceAll('₹','Rs. ')}</p><small className="activity-scope">{item.metadata?.groupName || scope(item)}</small>{item.metadata?.amount != null && <strong>Rs. {Number(item.metadata.amount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong>}<time>{new Date(item.created_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}</time><button className="activity-detail-link" onClick={()=>setSelected(item)}>View details</button></div>{!item.read_at && <span className="activity-unread" aria-label="New activity" />}
+                <div className="activity-icon"><Icon size={18} /></div><div style={{ flex: 1, minWidth: 0 }}><h3 className="activity-event-title">{item.title || ({expense:"Expense added",friend_added:"Friend added",settlement:"Payment recorded"}[item.type] || "Activity update")}</h3><p>{message.replaceAll('₹','Rs. ')}</p><small className="activity-scope">{item.metadata?.groupName || scope(item)}</small>{item.metadata?.amount != null && <strong>Rs. {Number(item.metadata.amount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong>}<time>{new Date(item.created_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}</time><button className="activity-detail-link" onClick={()=>setSelected(item)}>View details</button></div>{!item.read_at && <span className="activity-unread" aria-label="New activity" />}
             </article></div>;
         })}
         {hasMore && items.length >= 50 && <button disabled={loading} className="totals-toggle" onClick={async () => {
@@ -44,14 +44,14 @@ export default function Activity() {
         <BottomSheet isOpen={Boolean(selected)} onClose={()=>setSelected(null)} title="Activity details">
             {selected && <div className="activity-details">
                 <span className="activity-scope">{selected.metadata?.groupName || scope(selected)}</span>
-                <h3>{selected.metadata?.description || selected.type.replaceAll('_',' ')}</h3>
+                <h3>{selected.metadata?.description || selected.title || selected.type.replaceAll('_',' ')}</h3>
                 {selected.metadata?.amount != null && <strong className="activity-detail-amount">Rs. {Number(selected.metadata.amount).toLocaleString('en-IN',{maximumFractionDigits:2})}</strong>}
                 <p>{selected.message.replaceAll('₹','Rs. ')}</p>
                 <dl><div><dt>Recorded</dt><dd>{new Date(selected.created_at).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'})}</dd></div>
                 <div><dt>Recorded by</dt><dd>{selected.actor_id===user.id?'You':selected.actor_name || 'Former member'}</dd></div>
                 {selected.metadata?.category && <div><dt>Category</dt><dd>{selected.metadata.category}</dd></div>}
-                {(selected.metadata?.payerName || selected.metadata?.paidByName) && <div><dt>Paid by</dt><dd>{selected.metadata.payerName || selected.metadata.paidByName}</dd></div>}
-                {selected.metadata?.receiverName && <div><dt>Paid to</dt><dd>{selected.metadata.receiverName}</dd></div>}
+                {(selected.metadata?.payerName || selected.metadata?.paidByName) && <div><dt>Paid by</dt><dd>{(selected.metadata.payer || selected.metadata.paidBy)===user.id?'You':selected.metadata.payerName || selected.metadata.paidByName}</dd></div>}
+                {selected.metadata?.receiverName && <div><dt>Paid to</dt><dd>{selected.metadata.receiver===user.id?'You':selected.metadata.receiverName}</dd></div>}
                 </dl>
                 {selected.metadata?.splits?.length > 0 && <><h4>Split at the time</h4>{selected.metadata.splits.map(person=><div className="split-person" key={person.userId}><span>{person.userId===user.id?'You':person.name}</span><strong>Rs. {Number(person.amount).toLocaleString('en-IN')}</strong></div>)}</>}
             </div>}

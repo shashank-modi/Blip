@@ -1,5 +1,5 @@
 import PageHeader from '../components/PageHeader';
-import DateField from '../components/DateField';
+import DatePicker from '../components/DatePicker';
 import { localDate } from '../utils/splits';
 import { History } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -13,7 +13,7 @@ import { motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 // import GuidedTour from '../components/GuidedTour';
 
-import { Receipt, Repeat, Coffee, Car, ShoppingBag, Grid, CheckCircle2, Home as HomeIcon, HeartCrack, Briefcase, Gift, ArrowUpCircle, Plus, ArrowUpRight, LayoutDashboard, ChevronRight, Clapperboard, BookHeart, Hospital, ChevronDownIcon} from 'lucide-react';
+import { CalendarDays, Receipt, Repeat, Coffee, Car, ShoppingBag, Grid, CheckCircle2, Home as HomeIcon, HeartCrack, Briefcase, Gift, ArrowUpCircle, Plus, ArrowUpRight, LayoutDashboard, ChevronRight, Clapperboard, BookHeart, Hospital, ChevronDownIcon} from 'lucide-react';
 
 const parseExpenseInput = (input) => {
     const parts = input.trim().split(/\s+/);
@@ -282,36 +282,9 @@ export default function Home() {
                                 value={nlpInput}
                                 onChange={e => setNlpInput(e.target.value)}
                                 onKeyDown={e => e.key === 'Enter' && handleAddExpense(e)}
-                                style={{ flex: 1, paddingRight: '85px' }}
+                                style={{ flex: 1, minWidth: 0 }}
                             />
-                            <button type="button" aria-label="Choose expense date"
-                                onClick={() => setIsDateSheetOpen(true)}
-                                style={{
-                                    position: 'absolute', border: 0,
-                                    right: 0,
-                                    background: '#f2f3f5',
-                                    padding: '8px 10px',
-                                    borderRadius: '15px',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 6,
-                                    transition: 'all 0.2s',
-                                }}
-                                onPointerDown={e => e.currentTarget.style.transform = 'scale(0.95)'}
-                                onPointerUp={e => e.currentTarget.style.transform = 'scale(1)'}
-                            >
-                                <ChevronDownIcon size={14} color="#202020" />
-                                <span style={{ 
-                                    fontSize: '12px', 
-                                    fontWeight: '700', 
-                                    color: '#202020', 
-                                    
-                                    letterSpacing: '0.5px' 
-                                }}>
-                                    {formatDateLabel(selectedDate)}
-                                </span>
-                            </button>
+
                         </div>
                         {nlpInput.trim() && (
                             <div style={{ marginTop: 4, fontSize: 12, fontWeight: 500, color: (mainPreview && mainPreview.title) ? '#557529' : '#202020' }}>
@@ -323,56 +296,10 @@ export default function Home() {
                             </div>
                         )}
                     </div>
-                    {(inputFocused || selectedCat || isCatSheetOpen) && (
-                    <div 
-                        className="categories-row" 
-                        style={{ 
-                            display: 'flex', 
-                            overflowX: 'auto', 
-                            padding: '12px 0',
-                            paddingBottom: '8px', 
-                            gap: '8px',
-                            scrollbarWidth: 'none',
-                            msOverflowStyle: 'none' 
-                        }}
-                    >
-                        <style>{`.categories-row::-webkit-scrollbar { display: none; }`}</style>
-                        
-                        {catMap.map(c => (
-                            <div
-                                key={c.name}
-                                className={`cat-btn ${selectedCat === c.name ? 'selected' : ''}`}
-                                onMouseDown={e => e.preventDefault()}
-                                onClick={() => setSelectedCat(selectedCat === c.name ? '' : c.name)}
-                                style={catBtnStyle}
-                            >
-                                <span className="cat-icon">{c.icon}</span>
-                                <span className="cat-label">{c.name}</span>
-                            </div>
-                        ))}
-
-                        {selectedCat && !catMap.find(c => c.name === selectedCat) && (
-                            <div
-                                className="cat-btn selected"
-                                onClick={() => setSelectedCat('')}
-                                style={{...catBtnStyle,flexShrink: 0 }}
-                            >
-                                <span className="cat-icon"><Grid size={20} /></span>
-                                <span className="cat-label">{selectedCat}</span>
-                            </div>
-                        )}
-
-                        <div
-                            className="cat-btn"
-                            onClick={() => setIsCatSheetOpen(true)}
-                            onMouseDown={e => e.preventDefault()}
-                            style={{...catBtnStyle}}
-                        >
-                            <span className="cat-icon"><Plus size={20} /></span>
-                            <span className="cat-label">More</span>
-                        </div>
+                    <div className="expense-options">
+                        <button type="button" onClick={()=>setIsCatSheetOpen(true)} aria-haspopup="dialog" aria-label="Choose expense category"><Grid size={18}/><span><small>Category</small>{selectedCat || 'Automatic'}</span><ChevronDownIcon size={15}/></button>
+                        <button type="button" onClick={()=>setIsDateSheetOpen(true)} aria-haspopup="dialog" aria-label="Choose expense date"><CalendarDays size={18}/><span><small>Date</small>{formatDateLabel(selectedDate)}</span><ChevronDownIcon size={15}/></button>
                     </div>
-                )}
 
                     <button className="log-btn" onClick={handleAddExpense} disabled={savingExpense || !nlpInput.trim()}>
                         Add expense
@@ -381,107 +308,14 @@ export default function Home() {
 
                 <section className="wallet-overview"><span className="eyebrow">{new Date().toLocaleDateString('en-IN',{month:'long'})} AT A GLANCE</span><div className="wallet-number">Rs. {spent.toLocaleString('en-IN',{maximumFractionDigits:2})}</div><div className="wallet-overview-footer"><span>Spent this month</span><span>{budget ? remainingDisplay : 'No budget set'}</span></div><div className="budget-track"><span style={{width:`${budget?Math.min(100,spent/budget*100):0}%`,background:remainingOver?'#bb7354':undefined}}/></div><p className="field-help" style={{marginBottom:0}}>{budget?`Your monthly limit is Rs. ${budget.toLocaleString('en-IN')}.`:'Set a spending limit in Profile when you’re ready.'}</p><div className="wallet-links"><button onClick={()=>setCurrentScreen('logs')}>View transactions <ArrowUpRight size={16} aria-hidden="true"/></button><button onClick={()=>setCurrentScreen('dashboard')}>See spending insights <ArrowUpRight size={16} aria-hidden="true"/></button></div></section>
 
-                <BottomSheet 
-                    isOpen={isCatSheetOpen} 
-                    onClose={() => setIsCatSheetOpen(false)} 
-                    title="Custom Category"
-                >
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingBottom: '20px' }}>
-                        <p style={{ fontSize: '14px', color: 'var(--text-3)', lineHeight: '1.5' }}>
-                            Can't find a category? Type a custom one below.
-                        </p>
-                        
-                        <div className="form-field">
-                            <input
-                                autoFocus
-                                type="text"
-                                className="form-input"
-                                placeholder="e.g. Gift, Vacation, Petty Cash"
-                                value={customCatInput}
-                                onChange={e => setCustomCatInput(e.target.value)}
-                                style={{ fontSize: '16px', fontWeight: '600', borderRadius: 30 }}
-                            />
-                        </div>
-
-                        <button 
-                            className="overlay-submit" 
-                            onClick={() => {
-                                if (customCatInput.trim()) {
-                                    const finalValue = customCatInput.trim();
-                                    
-                                    if (isSheetOpen) {
-                                        setRecCat(finalValue);
-                                    } 
-                                    else {
-                                        setSelectedCat(finalValue);
-                                    }
-
-                                    setIsCatSheetOpen(false);
-                                    setCustomCatInput('');
-                                }
-                            }}
-                            disabled={!customCatInput.trim()}
-                        >
-                            Apply Category
-                        </button>
+                <BottomSheet isOpen={isCatSheetOpen} onClose={()=>setIsCatSheetOpen(false)} title="Choose category">
+                    <div className="category-picker">
+                        <div className="category-grid">{[{name:'',label:'Automatic',icon:<Grid size={20}/>},...catMap].map(category=><button type="button" key={category.name} aria-pressed={(isSheetOpen?recCat:selectedCat)===category.name} onClick={()=>{if(isSheetOpen)setRecCat(category.name);else setSelectedCat(category.name);setIsCatSheetOpen(false);}}><span>{category.icon}</span>{category.label || category.name}</button>)}</div>
+                        <div className="custom-category"><label className="panel-field"><span>Or create a category</span><input aria-label="Custom category" placeholder="e.g. Gifts or Travel" maxLength={50} value={customCatInput} onChange={event=>setCustomCatInput(event.target.value)}/></label><button type="button" className="button-primary" disabled={!customCatInput.trim()} onClick={()=>{if(isSheetOpen)setRecCat(customCatInput.trim());else setSelectedCat(customCatInput.trim());setCustomCatInput('');setIsCatSheetOpen(false);}}>Use category</button></div>
                     </div>
                 </BottomSheet>
-                
-                <BottomSheet 
-                    isOpen={isDateSheetOpen} 
-                    onClose={() => setIsDateSheetOpen(false)} 
-                    title="Select Date"
-                >
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '10px 4px 30px 4px' }}>
-                        <DateField value={localDate(selectedDate)} onChange={value => { if (value) { setSelectedDate(new Date(`${value}T12:00:00`)); setIsDateSheetOpen(false); } }}/>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                            {['Today', 'Yesterday'].map((label) => {
-                                const targetDate = new Date();
-                                if (label === 'Yesterday') targetDate.setDate(targetDate.getDate() - 1);
-                                
-                                const isSelected = selectedDate.toDateString() === targetDate.toDateString();
-
-                                return (
-                                    <button 
-                                        key={label}
-                                        onClick={() => {
-                                            setSelectedDate(targetDate);
-                                            setTimeout(() => setIsDateSheetOpen(false), 300);
-                                        }}
-                                        style={{ 
-                                            height: '65px', 
-                                            borderRadius: '42px',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                                            background: isSelected ? '#202020' : '#ffffff',
-                                            border: isSelected ? '2px solid #ffffff' : '1.5px solid #202020', 
-                                            color: isSelected ? '#ffffff' : '#202020',
-                                            transform: isSelected ? 'scale(1.02)' : 'scale(1)',
-                                        }}
-                                    >
-                                        <span style={{ 
-                                            fontSize: '10px', 
-                                            fontWeight: '800', 
-                                            textTransform: 'uppercase', 
-                                            letterSpacing: '1px', 
-                                            opacity: isSelected ? 1 : 0.5, 
-                                            marginBottom: '4px'
-                                        }}>
-                                            {isSelected ? 'Current' : 'Set to'}
-                                        </span>
-                                        <span style={{ fontSize: '15px', fontWeight: '600'}}>
-                                            {label}
-                                        </span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
+                <BottomSheet isOpen={isDateSheetOpen} onClose={()=>setIsDateSheetOpen(false)} title="Expense date">
+                    <DatePicker value={localDate(selectedDate)} onChange={value=>{setSelectedDate(new Date(`${value}T12:00:00`));setIsDateSheetOpen(false);}}/>
                 </BottomSheet>
 
                 <div className="section-title" style={{ marginTop: '20px' }}>Explore</div>

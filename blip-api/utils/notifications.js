@@ -1,6 +1,9 @@
+import { notificationText } from './notificationText.js';
 export async function notify(query, actorId, recipients, type, detail, metadata = {}) {
     const actor = await query('SELECT name FROM users WHERE id = $1', [actorId]);
-    const message = `${actor.rows[0]?.name || 'Someone'} ${detail}`;
+    metadata = { ...metadata, actorName: actor.rows[0]?.name || 'Someone' };
+    if (metadata.friendId) metadata.friendName = (await query('SELECT name FROM users WHERE id=$1', [metadata.friendId])).rows[0]?.name;
+    const fallback = `${metadata.actorName} ${detail}`;
     // Store an event snapshot so details still make sense after edits/deletions.
     if (metadata.groupId) metadata = { ...metadata, groupName: (await query('SELECT name FROM groups WHERE id=$1', [metadata.groupId])).rows[0]?.name };
     if (metadata.expenseId && type !== 'expense_deleted') {
@@ -15,6 +18,7 @@ export async function notify(query, actorId, recipients, type, detail, metadata 
 
     for (const recipient of new Set([actorId, ...recipients])) {
         if (!recipient) continue;
+        const {message} = notificationText({actor_id:actorId,type,metadata,message:fallback},recipient);
         const origin = type === 'expense' && metadata.expenseId ? `expense:${metadata.expenseId}` : type === 'settlement' && metadata.paymentId ? `settlement:${metadata.paymentId}` : null;
         await query(`INSERT INTO notifications (user_id, actor_id, type, message, read_at, metadata, origin_key)
             VALUES ($1,$2,$3,$4,CASE WHEN $1=$2 THEN NOW() ELSE NULL END,$5,$6)`, [recipient, actorId, type, message, metadata, origin]);

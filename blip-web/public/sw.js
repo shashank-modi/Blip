@@ -39,7 +39,7 @@ self.addEventListener('fetch', event => {
 self.addEventListener('push', event => {
     let data = {};
     try { data = event.data?.json() || {}; } catch { /* Show a safe fallback for an invalid payload. */ }
-    event.waitUntil(self.registration.showNotification(data.title || 'blip. · New activity', {
+    event.waitUntil(self.registration.showNotification(data.title || 'Activity update', {
         body: data.body || 'There’s an update to your shared expenses.',
         icon: '/logo-192.png', badge: '/logo-192.png',
         tag: data.id || 'blip-activity',

@@ -1,3 +1,4 @@
+import { notificationText } from '../utils/notificationText.js';
 import express from 'express';
 import { requireAuth, getUserId } from '../middleware/auth.js';
 import { query } from '../db/client.js';
@@ -15,7 +16,7 @@ router.get('/', async (req, res, next) => {
             FROM notifications n LEFT JOIN users u ON u.id = n.actor_id
             WHERE n.user_id = $1 AND ($2::timestamptz IS NULL OR (n.created_at, n.id) < ($2::timestamptz, COALESCE($4::uuid, 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid)))
             ORDER BY n.created_at DESC, n.id DESC LIMIT $3`, [getUserId(req), before || null, limit, beforeId || null]);
-        res.json(result.rows);
+        res.json(result.rows.map(event => ({...event,...notificationText(event,getUserId(req))})));
     } catch (error) { next(error); }
 });
 router.patch('/read', async (req, res, next) => {
