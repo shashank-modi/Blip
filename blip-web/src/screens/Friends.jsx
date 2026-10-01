@@ -543,7 +543,7 @@ function AddFriendSheet({ isOpen, onClose, onAdded }) {
         } finally { setAdding(false); }
     };
 
-    const inviteLink = `https://blip-eta.vercel.app/join`;
+    const inviteLink = 'https://get-blip.vercel.app/join';
 
     return <BottomSheet isOpen={isOpen} onClose={onClose} title="Add a friend">
         <div className="connection-intro"><span className="connection-icon"><UserPlus size={24}/></span><div><h3>Start with someone you know</h3><p>Find them using the number they saved on Blip.</p></div></div>
@@ -552,7 +552,7 @@ function AddFriendSheet({ isOpen, onClose, onAdded }) {
         {error && <p className="form-error" role="alert">{error}</p>}
         {result?.found && <div className="friend-search-result" role="status"><Avatar initials={result.user.name.substring(0,2)} size={44}/><div><strong>{result.user.name}</strong><small>Ready to split with you</small></div><button className="button-primary" disabled={adding || added} onClick={handleAdd}>{adding ? 'Adding…' : added ? 'Added' : 'Add'}{added ? <Check size={16}/> : <Plus size={16}/>}</button></div>}
         {result?.found === false && <div className="friend-not-found" role="status"><strong>No account found yet</strong><p>Check the number, or ask your friend to join Blip and add their number in Profile.</p></div>}
-        <details className="friend-invite"><summary>New to Blip? Invite them <UserPlus size={16}/></summary><p className="field-help">Share this link or let them scan the code, then search for their number once they’ve joined.</p><div className="invite-code"><QRCodeSVG value={inviteLink} size={112}/><div><a href={inviteLink} target="_blank" rel="noreferrer">blip-eta.vercel.app/join</a><button className="button-secondary" onClick={async()=>{try{await navigator.clipboard.writeText(inviteLink);toast.success('Invite link copied');}catch{setError('Could not copy the link. You can select and copy it above.');}}}>Copy invite link</button></div></div></details>
+        <details className="friend-invite"><summary>New to Blip? Invite them <UserPlus size={16}/></summary><p className="field-help">Share this link or let them scan the code, then search for their number once they’ve joined.</p><div className="invite-code"><QRCodeSVG value={inviteLink} size={112}/><div><a href={inviteLink} target="_blank" rel="noreferrer">get-blip.vercel.app/join</a><button className="button-secondary" onClick={async()=>{try{await navigator.clipboard.writeText(inviteLink);toast.success('Invite link copied');}catch{setError('Could not copy the link. You can select and copy it above.');}}}>Copy invite link</button></div></div></details>
     </BottomSheet>;
 }
 

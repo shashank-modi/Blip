@@ -204,7 +204,7 @@ export default function Profile() {
         const shareData = {
             title: 'blip. — track expenses & split bills',
             text: 'I use blip to manage expenses and settle debts with friends. Check it out!',
-            url: 'https://blip-eta.vercel.app/',
+            url: 'https://get-blip.vercel.app/',
         };
 
         const fallbackCopy = async () => {
