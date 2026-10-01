@@ -1,137 +1,129 @@
 <div align="center">
 
-<img width="200" height="200" alt="blip-logo" src="https://github.com/user-attachments/assets/0e94f5fc-3428-4481-b470-83bd2db807e6" />
+<img src="blip-web/public/logo-512.png" alt="Blip logo" width="140" />
 
-## blip. 
-### (PWA) The fastest way to track wealth and settle social debt. No forms, just speed.
+<h1>blip.</h1>
 
-[![Vercel Build](https://img.shields.io/badge/Vercel-Deployed-c9F158?style=flat-square&logo=vercel)](https://blip-eta.vercel.app)
-![Node Version](https://img.shields.io/badge/Node-24.x-black?style=flat-square&logo=node.js&logoColor=c9f158)
-![Top Language](https://img.shields.io/github/languages/top/shashank-modi/Blip?style=flat-square&color=C9F158&logoColor=black)
-![License](https://img.shields.io/badge/License-MIT-black?style=flat-square)
+<p><strong>Money moves. Keep up.</strong></p>
 
-[**View Live Demo**](https://blip-eta.vercel.app) • [**Report Bug**](https://github.com/shashank-modi/Blip/issues)
+<p>Log everyday expenses, split shared bills, and see where you stand.</p>
+
+<p><a href="https://get-blip.vercel.app/">Open Blip</a> · <a href="https://github.com/shashank-modi/Blip/issues">Report an issue</a></p>
+
+<p>
+  <img alt="Installable PWA" src="https://img.shields.io/badge/PWA-installable-C9F158?style=flat-square" />
+  <img alt="React 19" src="https://img.shields.io/badge/React-19-202020?style=flat-square&amp;logo=react" />
+  <img alt="Node.js 22" src="https://img.shields.io/badge/Node.js-22-202020?style=flat-square&amp;logo=node.js" />
+  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-C9F158?style=flat-square" /></a>
+</p>
 
 </div>
 
----
+## Why Blip?
 
-## About
-The idea for **blip.** was to create a wealth-management application that could log expenses, add new income and also share expenses with friends and family members with a simple mechanism. 
+Money tracking should take less time than spending the money. Blip combines a quick personal wallet with shared expenses, so you can record a purchase, check your monthly pace, and settle up with friends in one place.
 
-Wealth Management or Expense Tracking is considered tedious to the time it takes for logging and adding expenses into complicated UI that takes the user some time to learn. The main objective was to create a simple design and user experience that it takes only **2 secs** for anyone to add a new expense. This might help in making people more conscious with their spending habits and track their expenses daily.
+- **Log in plain language.** Enter `coffee 180` or `180 coffee`. Blip extracts the amount and description and suggests a category from the words you use.
+- **Split fairly.** Track bills with friends or groups, see balances, and record full or partial settlements.
+- **Keep your wallet clear.** Choose whether a settlement also appears in your personal wallet. Payments and recoveries are recorded in the appropriate direction.
+- **See the pattern.** Review transactions, monthly budgets, and spending insights.
+- **Take it with you.** Install the PWA on your home screen and opt in to device notifications from Activity.
 
----
+### A quick expense
 
-## Tracking Expense (NLP Demo)
-**blip.** uses a custom Natural Language Processing (NLP) parser to turn human thoughts into financial data.
+| What you enter | What Blip records |
+| --- | --- |
+| `coffee 180` | **₹180** · Coffee · Food · Today |
 
-> **Input:** `blinkit 800`, tap Food and blip.
-> 
-> **Result:**
-> - **Amount:** ₹800
-> - **Category:** Food
-> - **Date:** [Today's Date]
-> - **Description:** "Blinkit"
+You can adjust the category or date before saving.
 
-<div align="center">
-  <img width="400" alt="ScreenRecording_04-19-2026 15" src="https://github.com/user-attachments/assets/e94facaa-526f-4d7a-8a2a-89618f78c18e" />
-</div>
+## A look inside
 
----
-## Visual Tour
-
-<div align="center">
-
-| Dashboard | Social Settlements | Smart Logging |
+| Spending dashboard | Shared settlement | Quick expense entry |
 | :---: | :---: | :---: |
-| <img src="https://github.com/user-attachments/assets/0634b9ce-f6bd-4750-aff1-629878d19993" width="200" /> | <img src="https://github.com/user-attachments/assets/02ab91f2-e426-4215-afb2-2d6567d68320" width="200" /> | <img src="https://github.com/user-attachments/assets/4e941531-03e5-47e8-bf55-efa9d4d80a32" width="200" /> |
-| *Analytics & budget tracking* | *One-tap debt resolution* | *NLP card for adding expense* |
+| <img src="https://github.com/user-attachments/assets/0634b9ce-f6bd-4750-aff1-629878d19993" alt="Blip spending dashboard showing a monthly budget and insights" width="210" /> | <img src="https://github.com/user-attachments/assets/02ab91f2-e426-4215-afb2-2d6567d68320" alt="Blip partial settlement sheet for a shared expense" width="210" /> | <img src="https://github.com/user-attachments/assets/4e941531-03e5-47e8-bf55-efa9d4d80a32" alt="Blip wallet with the quick expense input" width="210" /> |
 
-</div>
+<p align="center"><sub>Screenshots are from an earlier mobile build; the current interface may differ.</sub></p>
 
----
+## How it works
 
-## Key Features
+The frontend is a React and Vite PWA. Clerk handles sign-in. An Express API stores wallet and shared-expense data in PostgreSQL on Neon. A service worker receives Web Push events and opens Activity when a notification is tapped.
 
-* **Progressive Web App (PWA):** Installable on iOS/Android for a native app feel with zero App Store friction.
-* **Sub-second Logging:** A minimalist "Blip Card" designed for rapid entry.
-* **Smart Social Settlements:** A complex settlement engine that manages debts within groups (up to 6+ members).
-* **Wallet Sync Logic:** Unique "Accounting Direction" awareness. When you settle a debt, the app intelligently decides if it should hit your personal budget as an **Expense** (paying back) or **Income** (recovering funds).
-* **Minimal Matte-Charcoal UI:** High-contrast, accessibility-focused design using our signature `#C9F158` (Lime) and `#202020` (Charcoal) palette.
+```mermaid
+flowchart LR
+    PWA["React PWA"] -->|Sign-in| Clerk
+    PWA -->|HTTPS requests| API["Express API"]
+    API --> DB["Neon PostgreSQL"]
+    API -->|Web Push| Device["Device notifications"]
+```
 
----
+A shared settlement can optionally update the personal wallet. When you pay someone, Blip records a wallet expense; when you receive a repayment, it records income. This keeps a repayment from inflating your spending total.
 
-## Tech Stack
+**Stack:** React 19, Vite, Clerk, Node.js 22, Express, Neon PostgreSQL, Web Push, and Vercel.
 
-- **Frontend:** [React.js](https://reactjs.org/) + [Framer Motion](https://www.framer.com/motion/) (Animations)
-- **State:** React Context API + Custom Hooks
-- **Backend:** [Node.js 24](https://nodejs.org/) + Express
-- **Database:** [Neon](https://neon.tech/) (Serverless PostgreSQL)
-- **Deployment:** [Vercel](https://vercel.com/) (CI/CD)
+## Run locally
 
----
+Use Node.js 22 and a PostgreSQL database with the [required migrations](blip-api/migrations/README.md).
 
-## Engineering Deep Dive
+1. Clone the repo and install both packages:
 
-### The "Double-Counting" Problem
-In traditional apps, logging a group dinner *and* the subsequent repayment often ruins your monthly budget data. 
-
-**The blip. Solution:** We implemented **Direction-Aware Settlement**. When a user records a payment in a group, the system checks their `net_balance`:
-- If `balance < 0` (User owes): Logged as an **Expense** (Wallet Outflow).
-- If `balance > 0` (User is owed): Logged as **Income** (Wallet Recovery).
-
-This ensures that "Social Recoveries" don't inflate your spending metrics, maintaining a true reflection of your net wealth.
-
----
-
-### The Minimalism
-We believe high-quality software is defined by the things you *don't* have to do.
-* **Auto-Formatting:** Descriptions are automatically cleaned and capitalized for a professional-looking ledger.
-* **Social Graph Simplicity:** Add friends instantly via phone number—no complex invite codes or username searches, just like WhatsApp.
-* **Shopping to Spending:** Maintain a shopping list within the app. As you buy items, a single tap converts them into logged expenses, closing the loop between "Planning" and "Spending."
-* **Scheduled Reminders:** Recurring bills (Rent, Subscriptions) are kept as scheduled tasks that remind you to log them, ensuring your "Burn Rate" is always accurate.
-
----
-## Setup & Installation
-
-1. **Clone the Repo**
    ```bash
-   git clone [https://github.com/shashank-modi/Blip.git](https://github.com/shashank-modi/Blip.git)
+   git clone https://github.com/shashank-modi/Blip.git
+   cd Blip
+   npm ci --prefix blip-api
+   npm ci --prefix blip-web
    ```
 
-2.  **Install Dependencies**
+2. Create `blip-api/.env` with your database and Clerk credentials:
 
-    ```bash
-    npm install
-    ```
+   ```dotenv
+   DATABASE_URL=postgresql://...
+   CLERK_SECRET_KEY=...
+   CLERK_PUBLISHABLE_KEY=...
+   ALLOWED_ORIGIN=http://localhost:5173
+   ```
 
-3.  **Environment Variables**
-    Create a `.env` file in the root:
+3. Create `blip-web/.env` with the matching Clerk publishable key and the local API proxy:
 
-    ```env
-    VITE_API_URL=your_api_url
-    DATABASE_URL=your_neon_db_url
-    ```
+   ```dotenv
+   VITE_CLERK_PUBLISHABLE_KEY=...
+   VITE_API_URL=/api
+   ```
 
-4.  **Launch Development Server**
+4. Start the API and web app in separate terminals:
 
-    ```bash
-    npm run dev
-    ```
+   ```bash
+   npm start --prefix blip-api
+   npm run dev --prefix blip-web
+   ```
+
+Open [http://localhost:5173](http://localhost:5173). The Vite development server proxies `/api` to the local backend on port 3000.
+
+### Checks
+
+```bash
+npm test --prefix blip-api
+npm test --prefix blip-web
+npm run lint --prefix blip-web
+npm run build --prefix blip-web
+```
+
+## Deploy
+
+Blip uses separate Vercel projects for `blip-web` and `blip-api`. The frontend's `VITE_API_URL` must be the HTTPS **API** origin; the backend's `ALLOWED_ORIGIN` must be the exact frontend origin:
+
+```dotenv
+# Frontend project
+VITE_API_URL=https://YOUR-API-PROJECT.vercel.app
+
+# API project
+ALLOWED_ORIGIN=https://get-blip.vercel.app
+```
+
+Set the matching Clerk keys on both projects, `DATABASE_URL` on the API, and the VAPID values on the API if you want device notifications. Keep the same VAPID keypair across deployments. See the [deployment and migration guide](blip-api/migrations/README.md) for the full setup.
+
+On iPhone, add Blip to the Home Screen from Safari, open the installed app, then enable notifications in **Activity**. On Android, install it from Chrome and enable notifications in **Activity**. Use **Send test notification** there to check delivery on each device. Expense writes require a network connection.
 
 ---
 
-## Security & Best Practices
-Security Considerations and Best Practices at **blip**:
-
-* **Data Integrity:** All financial transactions are ACID-compliant via PostgreSQL, ensuring no data loss during concurrent group updates.
-* **Auth & Identity:** Secure session management via Google OAuth 2.0. No passwords are ever stored on our servers.
-* **Privacy Controls:** The "Wallet Sync" toggle ensures users have 100% control over which social recoveries or payments impact their private personal budget.
-* **API Security:** Protected routes and environment-variable-driven architecture to prevent credential leaks.
-
----
-
-<div align="center">
-Built with 🖤 by Shashank Modi
-</div>
+<div align="center">Made with care by Shashank Modi.</div>

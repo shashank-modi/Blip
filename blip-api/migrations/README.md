@@ -264,7 +264,7 @@ API:
 - `DATABASE_URL`: your Neon connection string (the pooled URL is suitable). The
   running server uses this name, not `NEON_DATABASE_URL`.
 - `CLERK_SECRET_KEY` and `CLERK_PUBLISHABLE_KEY`: the matching existing Clerk app.
-- `ALLOWED_ORIGIN`: `https://blip-eta.vercel.app` (or your exact current frontend
+- `ALLOWED_ORIGIN`: `https://get-blip.vercel.app` (or your exact current frontend
   domain, without a trailing slash).
 - `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`: copy your existing local
   API values privately. Reuse the keypair; do not regenerate it per deploy.
@@ -282,10 +282,7 @@ From the repository root, review and push:
 
 ```sh
 git status
-# The root README currently contains pre-existing conflict markers. Leave that
-# unrelated draft out of this release; this command does not delete its edits.
-git restore --staged README.md
-git add blip-api blip-web .gitignore
+git add blip-api blip-web .gitignore README.md
 git diff --cached --stat
 git diff --cached --name-only
 # Confirm no .env files or logs are listed, then:
@@ -297,7 +294,6 @@ Both projects deploy from the Git push when automatic deployments are enabled.
 Environment changes only affect new deployments: after saving any later change,
 redeploy the relevant project. Deploy both projects from the same commit. If a push
 is rejected because the remote moved, fetch/reconcile first; do not force-push.
-The unresolved root README remains a local draft and can be fixed separately.
 
 After both deployments finish:
 1. Open `https://YOUR-API-PROJECT.vercel.app/health` and `/health/db`; expect OK
