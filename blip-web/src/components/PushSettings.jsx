@@ -39,5 +39,14 @@ export default function PushSettings() {
         } catch(err){toast.error(err.message || 'Could not enable notifications. Try again.');}
         finally{setBusy(false);}
     };
-    return <div className="notification-control"><button className="button-secondary" disabled={busy} onClick={toggle} aria-pressed={enabled}>{enabled?<BellRing size={16}/>:<Bell size={16}/>} {busy?'Connecting…':enabled?'Turn off notifications':'Enable notifications'}</button></div>;
+    const sendTest=async()=>{
+        if(busy||!enabled)return;
+        setBusy(true);
+        try{
+            await api.testPush();
+            toast.success('Test notification queued. Check your device.');
+        }catch(err){toast.error(err.message || 'Could not send a test notification.');}
+        finally{setBusy(false);}
+    };
+    return <div className="notification-control"><button className="button-secondary" disabled={busy} onClick={toggle} aria-pressed={enabled}>{enabled?<BellRing size={16}/>:<Bell size={16}/>} {busy?'Connecting…':enabled?'Turn off notifications':'Enable notifications'}</button>{enabled&&<button className="button-secondary" disabled={busy} onClick={sendTest}>Send test notification</button>}</div>;
 }

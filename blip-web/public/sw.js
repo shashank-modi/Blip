@@ -43,15 +43,25 @@ self.addEventListener('push', event => {
         body: data.body || 'There’s an update to your shared expenses.',
         icon: '/logo-192.png', badge: '/logo-192.png',
         tag: data.id || 'blip-activity',
-        data: { url: '/?tab=activity' },
+        data: { url: '/app?tab=activity' },
     }));
 });
 self.addEventListener('notificationclick', event => {
     event.notification.close();
     event.waitUntil((async () => {
         const tabs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-        const tab = tabs.find(client => new URL(client.url).origin === self.location.origin);
-        if (tab) { tab.postMessage({ type: 'OPEN_ACTIVITY' }); return tab.focus(); }
-        return self.clients.openWindow('/?tab=activity');
+        const sameOrigin = client => new URL(client.url).origin === self.location.origin;
+        const tab = tabs.find(client => sameOrigin(client) && new URL(client.url).pathname === '/app') || tabs.find(sameOrigin);
+        if (tab) {
+            if (new URL(tab.url).pathname !== '/app') {
+                let appTab;
+                try { appTab = await tab.navigate?.('/app?tab=activity'); } catch { /* Open a fresh app window below. */ }
+                if (appTab) return appTab.focus();
+                return self.clients.openWindow('/app?tab=activity');
+            }
+            tab.postMessage({ type: 'OPEN_ACTIVITY' });
+            return tab.focus();
+        }
+        return self.clients.openWindow('/app?tab=activity');
     })());
 });

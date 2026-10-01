@@ -18,22 +18,31 @@ import WhatsNew from './components/WhatsNew';
 import { Lock, ChartBarBig, FastForward, X, ChevronLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from './lib/api';
+import { isInstalled } from './lib/pwa';
 
 function GoogleSignInButton() {
     const { signIn, isLoaded } = useSignIn();
     const [loading, setLoading] = useState(false);
+    const [loginError, setLoginError] = useState('');
 
     const handleLogin = async () => {
         if (!isLoaded || loading) return;
         setLoading(true);
-        await signIn.authenticateWithRedirect({
-            strategy: 'oauth_google',
-            redirectUrl: window.location.origin + '/sso-callback',
-            redirectUrlComplete: window.location.origin,
-        });
+        setLoginError('');
+        try {
+            await signIn.authenticateWithRedirect({
+                strategy: 'oauth_google',
+                redirectUrl: window.location.origin + '/sso-callback',
+                redirectUrlComplete: window.location.origin + '/app' + window.location.search,
+            });
+        } catch (error) {
+            setLoginError(error?.errors?.[0]?.message || 'Could not start sign in. Please try again.');
+            setLoading(false);
+        }
     };
 
     return (
+        <>
         <button
             onClick={handleLogin}
             disabled={!isLoaded || loading}
@@ -77,6 +86,8 @@ function GoogleSignInButton() {
                 </>
             )}
         </button>
+        {loginError && <p role="alert" style={{ color: '#ffd8d0', fontSize: 12, lineHeight: 1.5, marginTop: 10 }}>{loginError}</p>}
+        </>
     );
 }
 
@@ -217,11 +228,12 @@ function SignInPage({ onBack }) {
                 position: 'absolute', inset: 0,
                 background: '#202020',
                 display: 'flex', flexDirection: 'column',
+                alignItems: 'center',
                 padding: '0 28px',
                 overflow: 'hidden',
             }}>
                 {onBack && (
-                    <div style={{ position: 'absolute', top: 'max(24px, env(safe-area-inset-top, 24px))', left: 24, zIndex: 10, animation: 'siReveal 0.4s ease forwards' }}>
+                    <div style={{ position: 'absolute', top: 'max(24px, env(safe-area-inset-top, 24px))', left: 'max(24px, calc(50% - 230px))', zIndex: 10, animation: 'siReveal 0.4s ease forwards' }}>
                         <button 
                             onClick={onBack} 
                             style={{ 
@@ -238,6 +250,7 @@ function SignInPage({ onBack }) {
                 {/* Top — brand */}
                 <div style={{
                     paddingTop: 'max(56px, 16vh)',
+                    width: '100%', maxWidth: 460,
                     animation: 'siReveal 0.55s ease 0.1s both',
                 }}>
                     {/* Lime line */}
@@ -270,6 +283,7 @@ function SignInPage({ onBack }) {
                 {/* Bottom — features + button */}
                 <div style={{
                     marginTop: 'auto',
+                    width: '100%', maxWidth: 460,
                     paddingBottom: 'max(32px, env(safe-area-inset-bottom, 32px))',
                     display: 'flex', flexDirection: 'column', gap: 0,
                     animation: 'siReveal 0.5s ease 0.3s both',
@@ -430,8 +444,18 @@ function AppShell() {
 // ─── Root App ─────────────────────────────────────────────────────────────────
 function App() {
     const [viewLanding, setViewLanding] = useState(() => {
-        return !localStorage.getItem('blip_visited_direct');
+        const returningVisitor = localStorage.getItem('blip_visited_direct') === 'true';
+        if (window.location.pathname === '/' && (isInstalled() || returningVisitor)) {
+            window.history.replaceState(null, '', '/app' + window.location.search + window.location.hash);
+        }
+        return window.location.pathname !== '/app';
     });
+
+    useEffect(() => {
+        const syncViewWithUrl = () => setViewLanding(window.location.pathname !== '/app');
+        window.addEventListener('popstate', syncViewWithUrl);
+        return () => window.removeEventListener('popstate', syncViewWithUrl);
+    }, []);
 
     useEffect(() => {
         api.wakeup()
@@ -484,11 +508,13 @@ function App() {
     
     const handleEnterApp = () => {
         localStorage.setItem('blip_visited_direct', 'true');
+        window.history.pushState(null, '', '/app' + window.location.search);
         setViewLanding(false);
     };
 
     const handleBackToLanding = () => {
         localStorage.removeItem('blip_visited_direct');
+        window.history.pushState(null, '', '/' + window.location.search);
         setViewLanding(true);
     };
 

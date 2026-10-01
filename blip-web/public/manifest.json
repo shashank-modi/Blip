@@ -2,7 +2,7 @@
     "name": "Blip",
     "short_name": "Blip",
     "description": "Count on us, to count for you.",
-    "start_url": "/",
+    "start_url": "/app",
     "display": "standalone",
     "background_color": "#202020",
     "theme_color": "#202020",
