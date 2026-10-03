@@ -31,5 +31,6 @@ export function groupExpenseHistory(expenses = []) {
 }
 
 export function hasAppliedPayments(expense) {
+    if (typeof expense?.hasAppliedPayments === 'boolean') return expense.hasAppliedPayments;
     return (expense?.splits || []).some(split=>split.userId!==expense.paidBy && Number(split.amount)>0 && (Number(split.paidAmount)>0 || split.isPaid===true));
 }

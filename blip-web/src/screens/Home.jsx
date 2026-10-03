@@ -1,3 +1,4 @@
+import { suggestCategory } from '../utils/categories';
 import PageHeader from '../components/PageHeader';
 import DatePicker from '../components/DatePicker';
 import { localDate } from '../utils/splits';
@@ -74,6 +75,7 @@ export default function Home() {
     const [recParseError, setRecParseError] = useState('');
 
     const mainPreview = parseExpenseInput(nlpInput);
+    const suggestedCategory = suggestCategory(mainPreview?.title || nlpInput, expenses);
 
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [isDateSheetOpen, setIsDateSheetOpen] = useState(false);
@@ -220,7 +222,7 @@ export default function Home() {
         const compareDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
         if (compareDate.getTime() === today.getTime()) return 'Today';
-        if (compareDate.getTime() === yesterday.getTime()) return 'Yest';
+        if (compareDate.getTime() === yesterday.getTime()) return 'Yesterday';
         
         return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
     };
@@ -297,13 +299,12 @@ export default function Home() {
                         )}
                     </div>
                     <div className="expense-options">
-                        <button type="button" onClick={()=>setIsCatSheetOpen(true)} aria-haspopup="dialog" aria-label="Choose expense category"><Grid size={18}/><span><small>Category</small>{selectedCat || 'Automatic'}</span><ChevronDownIcon size={15}/></button>
-                        <button type="button" onClick={()=>setIsDateSheetOpen(true)} aria-haspopup="dialog" aria-label="Choose expense date"><CalendarDays size={18}/><span><small>Date</small>{formatDateLabel(selectedDate)}</span><ChevronDownIcon size={15}/></button>
+                        <button type="button" onClick={()=>setIsCatSheetOpen(true)} aria-haspopup="dialog" aria-label="Choose expense category"><Grid size={18}/><span><small>{selectedCat ? 'Category' : 'Auto category'}</small>{selectedCat || suggestedCategory || 'Automatic'}</span><ChevronDownIcon size={15}/></button>
                     </div>
 
-                    <button className="log-btn" onClick={handleAddExpense} disabled={savingExpense || !nlpInput.trim()}>
+                    <div className="expense-submit-row"><button type="button" className="compact-calendar" onClick={()=>setIsDateSheetOpen(true)} aria-haspopup="dialog" aria-label={`Expense date: ${formatDateLabel(selectedDate)}`} title={formatDateLabel(selectedDate)}><CalendarDays size={20}/><span>{formatDateLabel(selectedDate)}</span></button><button className="log-btn" onClick={handleAddExpense} disabled={savingExpense || !nlpInput.trim()}>
                         Add expense
-                    </button>
+                    </button></div>
                 </div>
 
                 <section className="wallet-overview"><span className="eyebrow">{new Date().toLocaleDateString('en-IN',{month:'long'})} AT A GLANCE</span><div className="wallet-number">Rs. {spent.toLocaleString('en-IN',{maximumFractionDigits:2})}</div><div className="wallet-overview-footer"><span>Spent this month</span><span>{budget ? remainingDisplay : 'No budget set'}</span></div><div className="budget-track"><span style={{width:`${budget?Math.min(100,spent/budget*100):0}%`,background:remainingOver?'#bb7354':undefined}}/></div><p className="field-help" style={{marginBottom:0}}>{budget?`Your monthly limit is Rs. ${budget.toLocaleString('en-IN')}.`:'Set a spending limit in Profile when you’re ready.'}</p><div className="wallet-links"><button onClick={()=>setCurrentScreen('logs')}>View transactions <ArrowUpRight size={16} aria-hidden="true"/></button><button onClick={()=>setCurrentScreen('dashboard')}>See spending insights <ArrowUpRight size={16} aria-hidden="true"/></button></div></section>
@@ -513,7 +514,7 @@ export default function Home() {
                         </div>
                     </div>
                 ) : (
-                    <div style={{
+                    <div className={`wallet-list-card${recurring.length === 0 ? ' wallet-empty-card' : ''}`} style={{
                         background: '#f8f8f6',
                         border: '1px solid #e9e9e5',
                         borderRadius: '24px',
@@ -556,6 +557,7 @@ export default function Home() {
                                 >
                                     <div
                                         onClick={() => setPayingRecurring(r)}
+                                        className="wallet-payment-row"
                                         style={{
                                             display: 'flex',
                                             alignItems: 'center',
@@ -616,7 +618,7 @@ export default function Home() {
                     </div>
 
                     {recentExpenses.length > 0 ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <div className="wallet-list-card">
                             {recentExpenses.map((e, index) => (
                                 <SwipeableItem
                                     key={e.id}
@@ -624,7 +626,7 @@ export default function Home() {
                                     onSwipeRight={() => handleSwipeRightRecent(e)}
                                 >
                                     <div
-                                        className="profile-row"
+                                        className="profile-row wallet-payment-row"
                                         style={{
                                             cursor: 'default',
                                             margin: 0,
@@ -673,7 +675,7 @@ export default function Home() {
                             ))}
                         </div>
                     ) : (
-                        <motion.div
+                        <motion.div className="wallet-empty-card"
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             style={{
@@ -714,23 +716,8 @@ export default function Home() {
                 </div>
 
                 {topExpenses.length > 0 ? (
-                    <div className="mosaic-outer">
-                        {topExpenses.length >= 1 && (
-                            <div className="mosaic-left">
-                                <div className="mosaic-label">{topExpenses[0].category}</div>
-                                <div className="mosaic-amount">Rs. {topExpenses[0].amount.toLocaleString()}</div>
-                                <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.9)', marginTop: '4px', fontWeight: 600 }}>{topExpenses[0].description}</div>
-                            </div>
-                        )}
-                        <div className="mosaic-right">
-                            {topExpenses.slice(1, 4).map((e) => (
-                                <div className="mosaic-cell" key={e.id}>
-                                    <div className="mosaic-label">{e.category}</div>
-                                    <div className="mosaic-amount">Rs. {e.amount.toLocaleString()}</div>
-                                    <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.9)', marginTop: '2px', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.description}</div>
-                                </div>
-                            ))}
-                        </div>
+                    <div className="wallet-list-card wallet-top-expenses">
+                        {topExpenses.slice(0, 4).map((expense, index) => <div className="wallet-payment-row wallet-top-row" key={expense.id}><span className="wallet-rank">{index + 1}</span><div><strong>{expense.description}</strong><small>{expense.category}</small></div><b>Rs. {expense.amount.toLocaleString()}</b></div>)}
                     </div>
                 ) : (
                     <section className="wallet-empty-card"><span aria-hidden="true"><ArrowUpRight size={24}/></span><h3>A fresh month, a clear picture.</h3><p>No expenses recorded this month.</p><small>Your biggest expenses will appear here as you log them above.</small></section>

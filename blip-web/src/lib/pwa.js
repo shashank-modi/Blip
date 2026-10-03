@@ -18,7 +18,7 @@ export async function registerServiceWorker() {
 export async function enablePush(publicKey) {
     if (!pushSupported()) throw new Error(isIOS() ? 'Add Blip to your Home Screen, then open it there to enable notifications.' : 'This browser does not support device notifications.');
     // Permission must be requested directly from the button gesture on iOS.
-    const permission = await Notification.requestPermission();
+    const permission = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
     if (permission !== 'granted') throw new Error(permission === 'denied' ? 'Notifications are blocked. Allow them in your browser or device settings.' : 'You can enable notifications whenever you’re ready.');
     await registerServiceWorker();
     let readyTimer;

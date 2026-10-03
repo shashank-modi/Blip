@@ -6,7 +6,10 @@ const target = host.endsWith('.neon.tech') ? 'Neon' : host.includes('supabase') 
 console.log(`Checking DATABASE_URL (${target}); read-only, credentials hidden.`);
 try {
     const result = await pool.query({
-        text: `SELECT to_regclass('public.settlement_credits') IS NOT NULL AS settlement_credits,
+        text: `SELECT to_regclass('public.expense_payers') IS NOT NULL AS expense_payers,
+            to_regclass('public.expense_debts') IS NOT NULL AS expense_debts,
+            to_regclass('public.debt_settlement_allocations') IS NOT NULL AS debt_settlement_allocations,
+            to_regclass('public.settlement_credits') IS NOT NULL AS settlement_credits,
             to_regclass('public.blip_balance_entries') IS NOT NULL AS balance_ledger,
             EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='blip_wallet_activity' AND NOT tgisinternal AND tgenabled<>'D') AS wallet_activity_trigger,
             to_regclass('public.monthly_budgets') IS NOT NULL AS monthly_budgets,

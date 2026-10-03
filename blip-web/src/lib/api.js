@@ -88,7 +88,6 @@ export const api = {
     getPushConfig: () => request('/notifications/push-config'),
     subscribePush: subscription => request('/notifications/subscriptions', { method: 'POST', body: JSON.stringify(subscription) }),
     unsubscribePush: endpoint => request('/notifications/subscriptions', { method: 'DELETE', body: JSON.stringify({ endpoint }) }),
-    testPush: () => request('/notifications/push-test', { method: 'POST' }),
     getGroupTotals: (id, range = {}) => request(`/groups/${id}/totals?${new URLSearchParams(range)}`),
     getGroups: () => request('/groups'),
     createGroup: (data) => request('/groups', { method: 'POST', body: JSON.stringify(data) }),

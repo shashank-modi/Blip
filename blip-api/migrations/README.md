@@ -1,7 +1,20 @@
-# Apply the expense-sharing update
+# Database updates
 
-These changes are local only; no code has been pushed or deployed. You previously
-confirmed applying migrations 001 and 002 to Neon and Supabase.
+## Multiple payers (005)
+
+Before running the updated API, apply **`005_multiple_payers.sql`** to each
+configured database (Neon production and Supabase development, if used).
+The user chose to run the hosted SQL manually. Codex has only applied it to an
+isolated local test database.
+
+This additive migration stores each person's contribution and the resulting net
+debts separately from consumption shares. Existing bills and settlements are
+preserved. A bill still counts once in totals; settlements and undo apply to the
+actual payer balances. Run `npm run check:db` after applying the SQL.
+
+For a database missing earlier migrations, use `neon-manual.sql`, which includes
+001–005. All migrations are rerunnable. Apply 004 before 005 if running individual
+files; rerunning 004 alone replaces the balance view, so always finish with 005.
 
 ## Latest update: any-amount payments (004)
 
@@ -16,7 +29,7 @@ This records payments only; Blip does not transfer money.
 A read-only check of the configured Neon database confirmed that monthly budgets
 and the Wallet activity trigger are installed; only the new payment credit table
 and balance view were missing. This update has **not** been applied to a hosted
-database by Codex. The full `neon-manual.sql` includes all four migrations and is
+database by Codex. The full `neon-manual.sql` includes all five migrations and is
 also safe to rerun if you are unsure which migrations Supabase has.
 
 ## Monthly budgets (003)
@@ -40,8 +53,8 @@ are code changes. The latest any-amount payment controls require migration 004.
 ## Full manual database migration
 
 For a database without earlier migrations, `neon-manual.sql` combines 001, 002,
-003, and 004 in a single transaction. It contains no credentials and is safe to rerun.
-Existing installations with 001–003 can run just 004 for this update.
+003, 004, and 005. It contains no credentials and is safe to rerun.
+Existing installations with 001–004 can run just 005 for this update.
 
 Existing ten-digit Indian phone numbers remain unchanged for compatibility with
 the old app. New numbers use international format. A canonical unique index

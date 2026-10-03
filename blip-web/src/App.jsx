@@ -15,6 +15,7 @@ import Activity from './screens/Activity';
 import Friends from './screens/Friends';
 import LandingPage from './screens/LandingPage';
 import WhatsNew from './components/WhatsNew';
+import NotificationPrompt from './components/NotificationPrompt';
 import { Lock, ChartBarBig, FastForward, X, ChevronLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from './lib/api';
@@ -355,6 +356,7 @@ function SignInPage({ onBack }) {
 
 // ─── App Shell ────────────────────────────────────────────────────────────────
 function AppShell() {
+    const [notificationReady, setNotificationReady] = useState(false);
     const { currentScreen, showWhatsNew, dismissWhatsNew, loading, startupError, bootstrapData, error, clearError, isRefreshing, handleRefresh } = useApp();
 
     if (loading) return <LoadingScreen />;
@@ -401,6 +403,7 @@ function AppShell() {
                 }}
             />
             <FeedbackRenderer />
+            <NotificationPrompt onReady={setNotificationReady} />
 
             <RefreshablePage className={`view-${currentScreen}`} resetKey={currentScreen} onRefresh={handleRefresh} disabled={isRefreshing || currentScreen === 'onboarding' || showWhatsNew}>
                     {error && (
@@ -433,7 +436,7 @@ function AppShell() {
 
             <BottomNav />
             <AnimatePresence>
-                {showWhatsNew && (
+                {showWhatsNew && notificationReady && (
                     <WhatsNew onClose={dismissWhatsNew} />
                 )}
             </AnimatePresence>

@@ -198,7 +198,7 @@ export default function Profile() {
         onConfirm: (v) => { if (v && !isNaN(Number(v)) && Number(v) > 0) updateUserBudget(v); }
     });
 
-    const handleEditPhone = () => { setPhoneDraft(user.phone || ''); setEditingPhone(true); };
+    const handleEditPhone = () => { setPhoneDraft(user.phone || user.suggestedPhone || ''); setEditingPhone(true); };
 
     const handleShareApp = async () => {
         const shareData = {
@@ -249,7 +249,7 @@ export default function Profile() {
             <BottomSheet isOpen={showBudgetHistory} onClose={()=>setShowBudgetHistory(false)} title="Monthly budget history"><p className="field-help">Each month keeps its own budget. Changing this month won’t rewrite earlier months. History starts when monthly tracking was enabled.</p>{budgetHistory.map(item=><div className="budget-history-row" key={item.month}><span>{new Date(`${item.month}-01T12:00:00`).toLocaleDateString('en-IN',{month:'long',year:'numeric'})}</span><strong>Rs. {formatCurrency(item.amount)}</strong></div>)}{!budgetHistory.length&&<p className="field-help">Your saved monthly budgets will appear here.</p>}</BottomSheet>
             <BottomSheet isOpen={editingPhone} onClose={() => setEditingPhone(false)} title="Phone number">
                 <p className="field-help">Choose your country, then enter your phone number. Friends can use it to find you on Blip.</p>
-                <PhoneInput value={phoneDraft} onChange={setPhoneDraft} />
+                <PhoneInput contactLabel="Use my contact card" value={phoneDraft} onChange={setPhoneDraft} />
                 <button className="button-primary" disabled={!phoneNumber(phoneDraft) || savingPhone} onClick={async () => {
                     setSavingPhone(true);
                     try { await updatePhone(phoneNumber(phoneDraft)); setEditingPhone(false); }

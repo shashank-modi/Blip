@@ -23,11 +23,11 @@
 
 Money tracking should take less time than spending the money. Blip combines a quick personal wallet with shared expenses, so you can record a purchase, check your monthly pace, and settle up with friends in one place.
 
-- **Log in plain language.** Enter `coffee 180` or `180 coffee`. Blip extracts the amount and description and suggests a category from the words you use.
+- **Log in plain language.** Enter `coffee 180` or `180 coffee`. Blip extracts the amount and description and previews a category using common words, phrases, local merchants, and matching past expenses.
 - **Split fairly.** Track bills with friends or groups, see balances, and record full or partial settlements.
 - **Keep your wallet clear.** Choose whether a settlement also appears in your personal wallet. Payments and recoveries are recorded in the appropriate direction.
 - **See the pattern.** Review transactions, monthly budgets, and spending insights.
-- **Take it with you.** Install the PWA on your home screen and opt in to device notifications from Activity.
+- **Take it with you.** Install the PWA on your home screen and enable device notifications from the invitation shown when you open the app.
 
 ### A quick expense
 
@@ -36,6 +36,22 @@ Money tracking should take less time than spending the money. Blip combines a qu
 | `coffee 180` | **₹180** · Coffee · Food · Today |
 
 You can adjust the category or date before saving.
+
+Shared expense entry opens as a full page on phones and a dialog on desktop. From Friends, choose the people first; inside a friend or group, that context is already selected. Enter a description and amount, then tap **Shared by** to check only the people involved. Equal splitting is the default. **By shares** accepts zero, and **Exact amounts** keeps entered amounts fixed while blank fields divide the remainder automatically.
+
+Group members can connect as friends directly from **People** or group settings.
+
+Phone fields offer a contact picker in supporting browsers. Only a selected contact’s phone numbers are read; contacts are never fetched in bulk. Country codes default from a saved choice, your existing number, or device region hints and remain editable. If sign-in supplies a phone number, onboarding offers it for review.
+
+### Multiple-payer expenses
+
+Shared bills support one payer or several contributors. Enter fixed contributions
+and leave other selected payers blank to divide the remainder automatically.
+Balances use contributions minus consumption shares; group totals count each bill
+once. Before running this API version, apply
+[`005_multiple_payers.sql`](blip-api/migrations/005_multiple_payers.sql) after
+migrations 001–004. Hosted migrations are left for the account owner to run.
+
 
 ## A look inside
 
@@ -122,7 +138,7 @@ ALLOWED_ORIGIN=https://get-blip.vercel.app
 
 Set the matching Clerk keys on both projects, `DATABASE_URL` on the API, and the VAPID values on the API if you want device notifications. Keep the same VAPID keypair across deployments. See the [deployment and migration guide](blip-api/migrations/README.md) for the full setup.
 
-On iPhone, add Blip to the Home Screen from Safari, open the installed app, then enable notifications in **Activity**. On Android, install it from Chrome and enable notifications in **Activity**. Use **Send test notification** there to check delivery on each device. Expense writes require a network connection.
+Blip automatically offers notifications when you open the app. Tap **Allow notifications** to open the browser permission dialog; browsers require this user interaction. On iPhone, add Blip to the Home Screen from Safari and open the installed app first. Dismissing the invitation snoozes it for seven days; blocked permissions and explicit opt-outs are respected. You can also manage notifications in **Activity**. Expense writes require a network connection.
 
 ---
 

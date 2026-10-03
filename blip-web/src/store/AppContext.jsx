@@ -1,3 +1,4 @@
+import { suggestCategory, expenseCategories } from '../utils/categories';
 import { disablePush } from '../lib/pwa';
 import { monthKey, expensesForMonth } from '../utils/month';
 import { createContext, useContext, useMemo, useState, useEffect, useCallback, useRef } from 'react';
@@ -34,23 +35,6 @@ const isNewerVersion = (v1, v2) => {
 const toTitleCase = (str) => {
     if (!str) return '';
     return str.replace(/\w\S*/g, txt => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
-};
-
-const CATEGORY_RULES = [
-    { category: 'Food', keywords: ['pizza', 'burger', 'chai', 'coffee', 'lunch', 'dinner', 'breakfast', 'zomato', 'swiggy', 'food', 'eat', 'restaurant', 'biryani', 'dosa', 'maggi', 'snack', 'juice', 'milk', 'groceries', 'blinkit', 'zepto', 'instamart'] },
-    { category: 'Transport', keywords: ['uber', 'ola', 'cab', 'auto', 'bus', 'metro', 'train', 'fuel', 'petrol', 'diesel', 'rapido', 'rickshaw', 'ticket', 'flight', 'irctc'] },
-    { category: 'Shopping', keywords: ['amazon', 'flipkart', 'myntra', 'ajio', 'clothes', 'shirt', 'shoes', 'dress', 'jeans', 'meesho', 'nykaa', 'purse', 'bag'] },
-    { category: 'Entertainment', keywords: ['netflix', 'spotify', 'prime', 'hotstar', 'movie', 'cinema', 'pvr', 'inox', 'game', 'youtube'] },
-    { category: 'Bills', keywords: ['electricity', 'wifi', 'internet', 'broadband', 'phone', 'recharge', 'water', 'gas', 'rent', 'maintenance'] },
-    { category: 'Health', keywords: ['medicine', 'doctor', 'pharmacy', 'hospital', 'gym', 'yoga', 'medic', 'tablet', 'chemist'] },
-];
-
-const autoCategory = (text) => {
-    const lower = text.toLowerCase();
-    for (const rule of CATEGORY_RULES) {
-        if (rule.keywords.some(kw => lower.includes(kw))) return rule.category;
-    }
-    return null;
 };
 
 const normalizeExpense = (e) => ({ ...e, amount: Number(e.amount) });
@@ -112,7 +96,7 @@ export const AppProvider = ({ children }) => {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const refreshPending = useRef(null);
 
-    const categories = useMemo(() => ['Food', 'Transport', 'Shopping', 'Entertainment', 'Bills', 'General'], []);
+    const categories = useMemo(() => expenseCategories, []);
 
     // ── Feedback state ────────────────────────────────────────────────────────
     const [flowAnim, setFlowAnim] = useState({ show: false, type: 'expense', amount: 0 });
@@ -247,6 +231,7 @@ export const AppProvider = ({ children }) => {
                 name: userData.name || name,
                 budget: Number(userData.monthly_budget || 0),
                 phone: userData.phone || '',
+                suggestedPhone: clerkUser.primaryPhoneNumber?.phoneNumber || '',
                 email: userData.email || email,
                 isNewUser,
                 isOnboarded: !!userData.is_onboarded,
@@ -438,7 +423,7 @@ export const AppProvider = ({ children }) => {
         if (!parsed) return false;
         let { amount, title: description } = parsed;
         description = toTitleCase(description || 'Manual Entry');
-        const bestCat = selectedCategory || autoCategory(description) || 'General';
+        const bestCat = selectedCategory || suggestCategory(description, expenses) || 'General';
         const dateStr = selectedDate ? new Date(selectedDate).toISOString() : new Date().toISOString();
 
         const tempId = `temp-${Date.now()}`;
@@ -588,7 +573,7 @@ export const AppProvider = ({ children }) => {
         const parsedAmount = parseFloat(amount);
         if (!parsedAmount || parsedAmount <= 0) return false;
         const cTitle = toTitleCase(title);
-        const bestCat = category || autoCategory(cTitle) || 'Bills';
+        const bestCat = category || suggestCategory(cTitle, expenses) || 'Bills';
         const tempItem = {
             id: `temp-${Date.now()}`, templateId: `temp-${Date.now()}`,
             logId: null, title: cTitle, amount: parsedAmount,

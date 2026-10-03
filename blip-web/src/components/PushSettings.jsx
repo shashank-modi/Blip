@@ -28,25 +28,16 @@ export default function PushSettings() {
         setBusy(true);
         try {
             // Keep the permission request in the click gesture; config is prefetched.
-            if(enabled){await disablePush();setEnabled(false);return;}
+            if(enabled){await disablePush();try{localStorage.setItem('blip_push_opt_out','true');}catch{/* Storage is optional. */}setEnabled(false);return;}
             if(!config?.enabled){
                 const fresh=await api.getPushConfig();setConfig(fresh);
                 toast(fresh.enabled?'Ready. Tap Enable notifications to allow them on this device.':'Device notifications are not configured on the server yet.');
                 return;
             }
-            await enablePush(config.publicKey);setEnabled(true);
+            await enablePush(config.publicKey);try{localStorage.removeItem('blip_push_opt_out');}catch{/* Storage is optional. */}setEnabled(true);
             toast.success('Notifications enabled');
         } catch(err){toast.error(err.message || 'Could not enable notifications. Try again.');}
         finally{setBusy(false);}
     };
-    const sendTest=async()=>{
-        if(busy||!enabled)return;
-        setBusy(true);
-        try{
-            await api.testPush();
-            toast.success('Test notification queued. Check your device.');
-        }catch(err){toast.error(err.message || 'Could not send a test notification.');}
-        finally{setBusy(false);}
-    };
-    return <div className="notification-control"><button className="button-secondary" disabled={busy} onClick={toggle} aria-pressed={enabled}>{enabled?<BellRing size={16}/>:<Bell size={16}/>} {busy?'Connecting…':enabled?'Turn off notifications':'Enable notifications'}</button>{enabled&&<button className="button-secondary" disabled={busy} onClick={sendTest}>Send test notification</button>}</div>;
+    return <div className="notification-control"><button className="button-secondary" disabled={busy} onClick={toggle} aria-pressed={enabled}>{enabled?<BellRing size={16}/>:<Bell size={16}/>} {busy?'Connecting…':enabled?'Turn off notifications':'Enable notifications'}</button></div>;
 }

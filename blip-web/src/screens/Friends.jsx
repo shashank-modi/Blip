@@ -1,11 +1,13 @@
+import GroupIcon, { GroupCategoryPicker } from '../components/GroupIcon';
+import { groupCategory } from '../utils/groupCategory';
 import { groupExpenseHistory, hasAppliedPayments } from '../utils/expenseOrder';
 import SettleSheet from '../components/SettleSheet';
 import DateField from '../components/DateField';
 import PageHeader from '../components/PageHeader';
-import { Equal, Scale, Hash, ArrowRight, ChartNoAxesCombined } from 'lucide-react';
+import { Equal, Scale, Hash, ArrowRight, ChartNoAxesCombined, ChevronDown as ChevronDownIcon } from 'lucide-react';
 import PhoneInput from '../components/PhoneInput';
 import { phoneNumber } from '../utils/phone';
-import { splitAmount, localDate } from '../utils/splits';
+import { splitAmount, splitExactAmount, localDate } from '../utils/splits';
 import GroupTotals from '../components/GroupTotals';
 import '../social.css';
 import { useState, useMemo, useEffect } from 'react';
@@ -28,7 +30,6 @@ const fadeIn = { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opaci
 const stagger = { animate: { transition: { staggerChildren: 0.06 } } };
 const slideUp = { initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.2 } };
 
-const GROUP_ICONS = ['🏖️', '🏠', '🍱', '✈️', '🎉', '🏕️', '🛵', '🎓', '💼', '🎮', '🏋️', '🎬'];
 
 const fmt = n => Math.abs(n).toLocaleString('en-IN');
 
@@ -171,19 +172,7 @@ function ProTip({ text }) {
     );
 }
 
-function FriendSearchInput({ friends, selected, onAdd, onRemove, placeholder = 'Choose friends to split with' }) {
-    const [query, setQuery] = useState('');
-    const suggestions = friends.filter(f => f.name.toLowerCase().includes(query.toLowerCase()) && !selected.some(person => person.id === f.id));
-    return <div className="participant-picker">
-        {selected.length > 0 && <div className="participant-chips">{selected.map(friend => <button type="button" key={friend.id} onClick={() => onRemove(friend.id)} aria-label={`Remove ${friend.name}`}><Avatar initials={friend.initials} size={22} dark/>{friend.name}<X size={13}/></button>)}</div>}
-        <div className="search-field"><Search size={18}/><input aria-label="Search friends to split with" value={query} onChange={e => setQuery(e.target.value)} placeholder={placeholder}/>{query && <button type="button" className="clear-search" aria-label="Clear friend search" onClick={() => setQuery('')}><X size={16}/></button>}</div>
-        <div className="participant-options">{suggestions.map(friend => <button type="button" key={friend.id} onClick={() => { onAdd(friend); setQuery(''); }}><Avatar initials={friend.initials} size={29}/><span>{friend.name}</span><Plus size={16}/></button>)}</div>
-        {query && !suggestions.length && <p className="field-help">No more matching friends. Add someone from the Friends page first.</p>}
-        {!friends.length && <p className="field-help">Add your first friend from the Friends page to start splitting bills.</p>}
-    </div>;
-}
-
-function useExpenseForm(initialExpense, initialPeople, userId) {
+function useExpenseForm(initialExpense, userId) {
     const [description, setDescription] = useState(initialExpense?.desc || '');
     const [amount, setAmount] = useState(initialExpense ? String(initialExpense.amount) : '');
     const [date, setDate] = useState(localDate(initialExpense?.date));
@@ -191,168 +180,165 @@ function useExpenseForm(initialExpense, initialPeople, userId) {
     const [shares, setShares] = useState({});
     const [unequal, setUnequal] = useState(Object.fromEntries((initialExpense?.splits || []).map(s => [s.userId, s.amount])));
     const [paidBy, setPaidBy] = useState(initialExpense?.paidBy || userId);
-    const [selectedPpl, setSelectedPpl] = useState(initialPeople || []);
     const total = Number(amount) || 0;
     const desc = description.trim();
-    const reset = () => { setDescription(initialExpense?.desc || ''); setAmount(initialExpense ? String(initialExpense.amount) : ''); setDate(localDate(initialExpense?.date)); setSplitType(initialExpense ? 'unequal' : 'equal'); setShares({}); setUnequal(Object.fromEntries((initialExpense?.splits || []).map(s => [s.userId, s.amount]))); setPaidBy(initialExpense?.paidBy || userId); setSelectedPpl(initialPeople || []); };
-    return { description, setDescription, amount, setAmount, date, setDate, splitType, setSplitType, shares, setShares, unequal, setUnequal, paidBy, setPaidBy, selectedPpl, setSelectedPpl, total, desc, reset };
+    const reset = () => { setDescription(initialExpense?.desc || ''); setAmount(initialExpense ? String(initialExpense.amount) : ''); setDate(localDate(initialExpense?.date)); setSplitType(initialExpense ? 'unequal' : 'equal'); setShares({}); setUnequal(Object.fromEntries((initialExpense?.splits || []).map(s => [s.userId, s.amount]))); setPaidBy(initialExpense?.paidBy || userId); };
+    return { description, setDescription, amount, setAmount, date, setDate, splitType, setSplitType, shares, setShares, unequal, setUnequal, paidBy, setPaidBy, total, desc, reset };
 }
 
-function ExpenseSheet({ isOpen, onClose, mode, allFriends, allGroups, preFriends = [], preGroup = null, editingExpense = null, groupMembers = null, onSaved }) {
-    const { user, editSocialExpense, addGroupExpense, addFriendExpense } = useApp();
+function ExpenseSheet({ isOpen, onClose, mode, allFriends = [], allGroups = [], preFriends = [], preGroup = null, editingExpense = null, groupMembers = null, onSaved }) {
+    const { user, groups = [], editSocialExpense, addGroupExpense, addFriendExpense } = useApp();
+    const availableGroups = allGroups.length ? allGroups : groups;
     const [submitting, setSubmitting] = useState(false);
-    const [saveError,setSaveError] = useState('');
+    const [saveError, setSaveError] = useState('');
     const locked = hasAppliedPayments(editingExpense);
     const isEditing = !!editingExpense;
-
     const initialPeople = editingExpense?.splits
         ? editingExpense.splits.filter(s => s.userId !== user.id).map(s => ({ id: s.userId, name: s.name || 'Friend', initials: (s.name || 'F').slice(0, 2).toUpperCase() }))
         : preFriends;
-    const form = useExpenseForm(editingExpense, initialPeople, user.id);
-    const [selectedGrp, setSelectedGrp] = useState(preGroup || '');
-    useEffect(() => { if (isOpen) { setSaveError(''); form.reset(); setSelectedGrp(preGroup || ''); } }, [isOpen, editingExpense?.id, preGroup]);
+    const form = useExpenseForm(editingExpense, user.id);
+    const defaultGroup = preGroup || (availableGroups.length === 1 ? availableGroups[0].id : '');
+    const [selectedGrp, setSelectedGrp] = useState(defaultGroup);
+    // null selects the whole group, including members loaded after the sheet opens.
+    const [included, setIncluded] = useState(null);
+    const [panel, setPanel] = useState(null);
+    const [query, setQuery] = useState('');
+    const [friendQuery, setFriendQuery] = useState('');
+    const [multiplePayers, setMultiplePayers] = useState(false);
+    const [payerIds, setPayerIds] = useState([]);
+    const [payerAmounts, setPayerAmounts] = useState({});
+    const [detailsShown, setDetailsShown] = useState(mode === 'group' || isEditing || preFriends.length > 0);
+    useEffect(() => {
+        if (!isOpen) return;
+        setSaveError(''); form.reset(); setSelectedGrp(defaultGroup); setPanel(mode === 'group' && !defaultGroup ? 'group' : null); setQuery(''); setFriendQuery(''); setDetailsShown(mode === 'group' || isEditing || preFriends.length > 0);
+        setMultiplePayers(Boolean(editingExpense?.payers?.length)); setPayerIds(editingExpense?.payers?.map(p => p.userId) || []); setPayerAmounts(Object.fromEntries((editingExpense?.payers || []).map(p => [p.userId, p.amount])));
+        setIncluded(editingExpense ? editingExpense.splits.map(s => s.userId) : mode === 'group' ? null : [user.id, ...preFriends.map(p => p.id)]);
+    }, [isOpen, editingExpense?.id, preGroup]);
 
-    const grpMembers = allGroups?.find(g => g.id === selectedGrp)?.members || groupMembers || [];
-    const people = mode === 'group'
-        ? (grpMembers.length > 0 ? grpMembers : [{ id: user.id, name: 'You', initials: 'YO' }])
-        : [{ id: user.id, name: 'You', initials: 'YO' }, ...form.selectedPpl];
-
-    const unequalUsed = people.reduce((sum, person) => {
-        return sum + parseFloat(form.unequal[person.id] || 0);
-    }, 0);
-
-    const unequalDiff = parseFloat((form.total - unequalUsed).toFixed(2));
-    const isUnequalSplitValid = Math.abs(unequalDiff) < 0.01 && people.every(person => {
-        const amount = Number(form.unequal[person.id] || 0);
-        return Number.isFinite(amount) && amount >= 0 && Math.abs(amount * 100 - Math.round(amount * 100)) < 0.000001;
+    const me = { id: user.id, name: 'You', initials: 'YO' };
+    const grpMembers = (selectedGrp === preGroup && groupMembers) || availableGroups.find(g => g.id === selectedGrp)?.members || [];
+    const editingPeople = [...initialPeople];
+    if (isEditing && editingExpense.paidBy !== user.id && !editingPeople.some(p => p.id === editingExpense.paidBy)) editingPeople.push(allFriends.find(p => p.id === editingExpense.paidBy) || { id: editingExpense.paidBy, name: editingExpense.paidByName || 'Friend', initials: 'FR' });
+    const candidates = mode === 'group' ? grpMembers : [me, ...(isEditing ? editingPeople : allFriends)];
+    const people = candidates.filter(p => included === null || included.includes(p.id));
+    const selectedFriends = people.filter(person => person.id !== user.id);
+    const friendMatches = candidates.filter(person => person.id !== user.id && !selectedFriends.some(selected => selected.id === person.id) && person.name.toLowerCase().includes(friendQuery.trim().toLowerCase()));
+    const showFriendMatches = !detailsShown || Boolean(friendQuery.trim()) || !selectedFriends.length;
+    const activeGroup = availableGroups.find(group => group.id === selectedGrp);
+    const addPerson = id => {
+        setIncluded(previous => [...new Set([...(previous || [user.id]), id])]);
+        setDetailsShown(true);
+        setFriendQuery('');
+    };
+    // Paying and participating are independent: someone can cover a bill without sharing it.
+    const payers = candidates;
+    const payingPeople = payers.filter(p => payerIds.includes(p.id));
+    const contributions = splitExactAmount(form.total, payingPeople, payerAmounts);
+    const payerError = multiplePayers ? contributions.error : '';
+    const exact = splitExactAmount(form.total, people, form.unequal);
+    const splits = form.splitType === 'unequal' ? exact.splits : splitAmount(form.total, people, form.splitType === 'shares' ? form.shares : {});
+    const splitError = !people.length ? 'Choose at least one person.' : form.splitType === 'unequal' ? exact.error : !splits.length ? (form.splitType === 'shares' ? 'Use zero or more shares, with at least one person above zero.' : 'Enter a valid bill amount.') : '';
+    const canSubmit = !locked && Number.isSafeInteger(Math.round(form.total * 100)) && form.total > 0 && Math.abs(form.total * 100 - Math.round(form.total * 100)) < 0.000001 &&
+        form.desc && form.date && Number.isFinite(Date.parse(form.date)) && !splitError && !payerError && (multiplePayers ? contributions.splits.some(p => p.amount > 0) : payers.some(p => p.id === form.paidBy)) &&
+        (mode === 'group' ? !!selectedGrp : (people.some(p => p.id !== user.id) || (multiplePayers ? contributions.splits.some(p => p.userId !== user.id && p.amount > 0) : form.paidBy !== user.id)));
+    const name = p => p.id === user.id ? 'You' : p.name;
+    const sharedLabel = !people.length ? 'Choose people' : mode === 'group' && people.length === candidates.length ? 'Everyone' : people.length <= 2 ? people.map(name).join(' & ') : `${people.length} people`;
+    const togglePerson = id => setIncluded(previous => {
+        const current = previous ?? candidates.map(p => p.id);
+        return current.includes(id) ? current.filter(value => value !== id) : [...current, id];
     });
-
-    const validShares = people.every(person => Number.isFinite(Number(form.shares[person.id] ?? 1)) && Number(form.shares[person.id] ?? 1) > 0);
-    const canSubmit = !locked && Number.isFinite(form.total) && form.total > 0 && Math.abs(form.total * 100 - Math.round(form.total * 100)) < 0.000001 &&
-        form.desc && form.date && Number.isFinite(Date.parse(form.date)) &&
-        (form.splitType === 'unequal' ? isUnequalSplitValid : splitAmount(form.total, people, form.splitType === 'shares' ? form.shares : {}).length === people.length) &&
-        (mode === 'friend' ? form.selectedPpl.length > 0 : !!selectedGrp);
-
-    const handleClose = () => { form.reset(); onClose(); };
-
+    const handleClose = () => { if (!submitting) onClose(); };
     const handleSubmit = async () => {
         if (!canSubmit || submitting) return;
         setSubmitting(true); setSaveError('');
         try {
-            const splits = form.splitType === 'unequal'
-                ? people.map(p => ({ userId: p.id, amount: Number(form.unequal[p.id] || 0) }))
-                : splitAmount(form.total, people, form.splitType === 'shares' ? form.shares : {});
-
-            const payload = { description: form.desc, amount: form.total, paidBy: form.paidBy, date: new Date(`${form.date}T12:00:00`).toISOString(), splits: splits.map(s => ({ userId: s.userId, amount: s.amount })) };
-
-            if (isEditing) { await editSocialExpense(editingExpense.id, payload); }
-            else if (mode === 'group') { await addGroupExpense(selectedGrp, payload); }
-            else { const friendId = form.selectedPpl[0]?.id || preFriends[0]?.id; await addFriendExpense(friendId, payload); }
-
-            form.reset();
+            // Keep the creator's friend bill accessible even when only the friend owes money.
+            const savedSplits = [...splits];
+            if (mode === 'friend') {
+                for (const id of [user.id, ...(multiplePayers ? payingPeople.map(p => p.id) : [form.paidBy])]) {
+                    if (!savedSplits.some(s => s.userId === id)) savedSplits.push({ userId: id, amount: 0 });
+                }
+            }
+            const payload = { description: form.desc, amount: form.total, paidBy: form.paidBy, ...(multiplePayers ? { payers: contributions.splits.filter(p => p.amount > 0) } : {}), date: new Date(`${form.date}T12:00:00`).toISOString(), splits: savedSplits };
+            if (isEditing) await editSocialExpense(editingExpense.id, payload);
+            else if (mode === 'group') await addGroupExpense(selectedGrp, payload);
+            else await addFriendExpense(savedSplits.find(s => s.userId !== user.id).userId, payload);
             if (onSaved) await onSaved();
             onClose();
         } catch (err) { setSaveError(err.message || 'Could not save this bill. Try again.'); }
         finally { setSubmitting(false); }
     };
-
-    if (isOpen && locked) return <BottomSheet isOpen={isOpen} onClose={onClose} title="This bill has payments">
-        <div className="locked-bill"><Receipt size={28}/><h3>{editingExpense.desc}</h3><p>A payment has already been applied to this bill. Undo the related payment records in this friend or group before changing or deleting it.</p><p>Then correct the split and record the money already paid again. Undoing a record does not move any money.</p><button className="button-primary" onClick={onClose}>Back to bills</button></div>
-    </BottomSheet>;
-    return (
-        <BottomSheet isOpen={isOpen} onClose={handleClose} title={isEditing ? 'Edit Expense' : 'Add Expense'}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20, paddingBottom: 12 }}>
-
-                <div className="expense-form-meta"><div><span className="eyebrow">{mode === 'group' ? 'YOUR GROUP' : 'WHO’S SHARING?'}</span><p className="field-help" style={{margin:'5px 0'}}>One bill. Everyone’s share.</p></div><DateField value={form.date} onChange={form.setDate}/></div>
-
-                {mode === 'group' && !isEditing ? (
-                    <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'none' }}>
-                        {(allGroups || []).map(g => (
-                            <div key={g.id} onClick={() => setSelectedGrp(g.id)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 18, cursor: 'pointer', flexShrink: 0, background: selectedGrp === g.id ? '#202020' : '#ffffff', color: selectedGrp === g.id ? '#ffffff' : '#202020', border: `1px solid ${selectedGrp === g.id ? '#202020' : '#e5e7eb'}`, transition: 'all 0.2s' }}>
-                                <span>{g.icon}</span><span style={{ fontWeight: 700, fontSize: 13 }}>{g.name}</span>
-                            </div>
-                        ))}
-                    </div>
-                ) : mode === 'friend' && !isEditing && (
-                    <FriendSearchInput friends={allFriends} selected={form.selectedPpl} onAdd={f => form.setSelectedPpl(p => [...p, f])} onRemove={id => form.setSelectedPpl(p => p.filter(f => f.id !== id))} />
-                )}
-
+    if (isOpen && locked) return <BottomSheet isOpen={isOpen} onClose={onClose} title="This bill has payments"><div className="locked-bill"><Receipt size={28}/><h3>{editingExpense.desc}</h3><p>A payment has already been applied to this bill. Undo the related payment records before changing it, then record the payments again.</p><button className="button-primary" onClick={onClose}>Back to bills</button></div></BottomSheet>;
+    return <>
+        <BottomSheet mobilePage mobileAction={detailsShown ? { onClick: handleSubmit, disabled: !canSubmit || submitting, label: submitting ? 'Saving expense' : 'Save expense' } : null} isOpen={isOpen} onClose={handleClose} title={isEditing ? 'Edit expense' : 'Add expense'}>
+            <div className="quick-expense-form">
+                {mode === 'group' ? <div className="expense-form-meta">
+                    {preGroup || isEditing ? <div className="expense-group-context"><GroupIcon icon={activeGroup?.icon} type={activeGroup?.type}/><strong>{activeGroup?.name || 'Group expense'}</strong></div> : <button type="button" className="expense-group-trigger" disabled={submitting} onClick={() => { setQuery(''); setPanel('group'); }}><GroupIcon icon={activeGroup?.icon} type={activeGroup?.type}/><span>{activeGroup?.name || 'Choose a group'}</span><ChevronDownIcon size={18}/></button>}
+                </div> : <section className="expense-people-entry" aria-label="Expense participants">
+                    {detailsShown ? <div className="expense-with-people"><span>With you and</span><div className="expense-selected-chips">{selectedFriends.map(person => <button type="button" key={person.id} aria-label={`Remove ${person.name}`} onClick={() => togglePerson(person.id)}>{person.name}<X size={15}/></button>)}</div></div> : <h3>Who’s it with?</h3>}
+                    <div className="search-field"><Search size={18}/><input aria-label="Find friends for expense" placeholder={detailsShown ? 'Add more people…' : 'Search friends'} value={friendQuery} onChange={e => setFriendQuery(e.target.value)}/>{friendQuery && <button type="button" className="clear-search" aria-label="Clear friend search" onClick={() => setFriendQuery('')}><X size={16}/></button>}</div>
+                    {showFriendMatches && <div className="expense-friend-results">{friendMatches.map(person => <button type="button" key={person.id} aria-label={`Add ${person.name} to expense`} onClick={() => addPerson(person.id)}><Avatar initials={person.initials} size={34}/><span>{person.name}</span><Plus size={18}/></button>)}</div>}
+                    {showFriendMatches && !friendMatches.length && <p className="field-help">{candidates.length <= 1 ? 'Add a friend from Friends to start sharing a bill.' : friendQuery ? 'No other friends match that name.' : 'Everyone available is already included.'}</p>}
+                </section>}
+                {detailsShown && <>
                 <div className="expense-entry">
                     <label className="field-label" htmlFor="shared-description">What was it for?</label>
-                    <input id="shared-description" className="expense-name" autoFocus maxLength={200} value={form.description} onChange={e => form.setDescription(e.target.value)} placeholder="Dinner, hotel, groceries…" />
+                    <input id="shared-description" className="expense-name" autoFocus maxLength={200} value={form.description} onChange={e => form.setDescription(e.target.value)} placeholder="Dinner, hotel, groceries…"/>
                     <label className="field-label" htmlFor="shared-amount">Amount</label>
-                    <div className="expense-amount"><span>Rs. </span><input id="shared-amount" type="number" min="0.01" step="0.01" inputMode="decimal" value={form.amount} onChange={e => form.setAmount(e.target.value)} placeholder="0.00" /></div>
-                    <div className="entry-caption">{people.length} {people.length === 1 ? 'person' : 'people'} · {form.splitType === 'equal' ? 'Split equally, down to the last paisa' : 'Choose each person’s share below'}</div>
+                    <div className="expense-amount"><span>Rs. </span><input id="shared-amount" type="number" min="0.01" step="0.01" inputMode="decimal" value={form.amount} onChange={e => form.setAmount(e.target.value)} placeholder="0.00"/></div>
                 </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '1.2px', marginLeft: 4 }}>
-                        Paid By
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'none' }}>
-                        {people.map(p => {
-                            const isSelected = form.paidBy === p.id;
-                            return (
-                                <motion.button type="button" aria-pressed={isSelected} aria-label={`Paid by ${p.name}`}
-                                    key={p.id}
-                                    whileTap={{ scale: 0.95 }}
-                                    onClick={() => form.setPaidBy(p.id)}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 8,
-                                        padding: '8px 14px',
-                                        borderRadius: 25,
-                                        cursor: 'pointer',
-                                        flexShrink: 0,
-                                        background: isSelected ? '#202020' : '#ffffff',
-                                        color: isSelected ? '#ffffff' : '#202020',
-                                        border: `1px solid ${isSelected ? '#202020' : '#e5e7eb'}`,
-                                        boxShadow: isSelected ? '0 4px 12px rgba(0,0,0,0.1)' : 'none',
-                                        transition: 'all 0.2s ease'
-                                    }}
-                                >
-                                    <Avatar initials={p.initials} size={20} />
-                                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: "'Montserrat', sans-serif" }}>
-                                        {p.id === 'me' ? 'You' : p.name.split(' ')[0]}
-                                    </span>
-                                    {isSelected && <Check size={14} color="#c9f158" strokeWidth={3} />}
-                                </motion.button>
-                            );
-                        })}
-                    </div>
+                <div className="expense-summary-rows">
+                    <button type="button" className="expense-summary-row" onClick={() => setPanel('payer')}><Wallet size={18}/><span>Paid by <strong>{multiplePayers ? `${contributions.splits.filter(p => p.amount > 0).length || payingPeople.length} people` : name(payers.find(p => p.id === form.paidBy) || me)}</strong></span><ChevronRight size={17}/></button>
+                    <button type="button" className="expense-summary-row" onClick={() => { setQuery(''); setPanel('split'); }}><Users size={18}/><span>Shared by <strong>{sharedLabel}</strong><small>{form.splitType === 'equal' ? 'Equally' : form.splitType === 'shares' ? 'By shares' : 'Exact amounts'} · Tap to change</small></span><ChevronRight size={17}/></button>
                 </div>
+                {people.length > 0 && splits.length > 0 && <p className="expense-share-preview">{splits.some(s => s.userId === user.id) ? `Your share: Rs. ${(splits.find(s => s.userId === user.id)?.amount || 0).toFixed(2)}` : 'You’re not sharing this bill'}<span>{people.length} {people.length === 1 ? 'person' : 'people'} included</span></p>}
+                {form.total > 0 && splitError && <p className="form-error" role="status">{splitError}</p>}
 
-                {people.length >= 2 && <section className="split-editor" aria-label="Split the bill">
-                    <div className="split-tabs">{[{id:'equal',label:'Equally',Icon:Equal},{id:'unequal',label:'Exact amounts',Icon:Scale},{id:'shares',label:'By shares',Icon:Hash}].map(({id,label,Icon}) => <button key={id} type="button" aria-pressed={form.splitType === id} onClick={() => {
-                        if (id === 'unequal' && !Object.keys(form.unequal).length) form.setUnequal(Object.fromEntries(splitAmount(form.total,people).map(s=>[s.userId,s.amount])));
-                        form.setSplitType(id);
-                    }}><Icon size={19}/>{label}</button>)}</div>
-                    <p className="split-description">{form.splitType === 'equal' ? 'Everyone pays the same share. We handle any rounding.' : form.splitType === 'unequal' ? 'Enter what each person owes. The amounts must add up to the bill.' : 'Use shares as weights. Two shares pays twice as much as one.'}</p>
-                    {people.map(p => {
-                        const share = splitAmount(form.total, people, form.splitType === 'shares' ? form.shares : {}).find(s=>s.userId===p.id)?.amount || 0;
-                        return <div className="split-row" key={p.id}><Avatar initials={p.initials} size={34}/><div className="split-person-name">{p.id === user.id ? 'You' : p.name}<small>{form.splitType === 'shares' ? `Rs. ${share.toFixed(2)}` : p.id === form.paidBy ? 'Paid the bill' : 'Share of the bill'}</small></div>
-                            {form.splitType === 'equal' ? <strong>Rs. {share.toFixed(2)}</strong> : <div className="split-number"><span>{form.splitType === 'unequal' ? 'Rs. ' : '×'}</span><input type="number" inputMode={form.splitType === 'shares' ? 'numeric' : 'decimal'} min={form.splitType === 'shares' ? 1 : 0} step={form.splitType === 'shares' ? 1 : .01} aria-label={`${p.id === user.id ? 'Your' : p.name + "’s"} ${form.splitType === 'shares' ? 'shares' : 'amount'}`} value={form.splitType === 'shares' ? (form.shares[p.id] ?? 1) : (form.unequal[p.id] ?? '')} placeholder="0.00" onChange={e => form.splitType === 'shares' ? form.setShares({...form.shares,[p.id]:e.target.value}) : form.setUnequal({...form.unequal,[p.id]:e.target.value})}/></div>}
-                        </div>;
-                    })}
-                    <div className={`split-summary${(form.splitType === 'unequal' && !isUnequalSplitValid) || (form.splitType === 'shares' && !validShares) ? ' invalid' : ''}`} aria-live="polite"><span>{form.splitType === 'shares' && !validShares ? 'Each person needs a share greater than zero' : form.splitType === 'unequal' && !isUnequalSplitValid ? `Rs. ${Math.abs(unequalDiff).toFixed(2)} ${unequalDiff < 0 ? 'over the bill total' : 'left to allocate'}` : 'Everything adds up'}</span><strong>Total Rs. {form.total.toFixed(2)}</strong></div>
-                </section>}
+                {form.total > 0 && payerError && <p className="form-error" role="status">Payments: {payerError}</p>}
                 {saveError && <p className="form-error" role="alert">{saveError}</p>}
-                <motion.button
-                    whileTap={{ scale: 0.97 }}
-                    disabled={!canSubmit || submitting}
-                    onClick={handleSubmit}
-                    style={{
-                        background: canSubmit ? '#202020' : '#bab9b9ff', color: canSubmit ? '#ffffff' : '#ffffff', letterSpacing: '1.5px',
-                        border: 'none', borderRadius: 25, padding: '18px', fontSize: 15, fontWeight: 700, cursor: canSubmit ? 'pointer' : 'not-allowed',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, boxShadow: canSubmit ? '0 10px 30px rgba(0,0,0,0.15)' : 'none'
-                    }}
-                >
-                    {submitting ? <Loader2 size={25} className="animate-spin" /> : <>Confirm Expense</>}
-                </motion.button>
+                <div className="expense-submit-row"><DateField compact value={form.date} onChange={form.setDate}/><button className="button-primary" disabled={!canSubmit || submitting} onClick={handleSubmit}>{submitting ? 'Saving…' : isEditing ? 'Save changes' : 'Add expense'}</button></div>
+                </>}
             </div>
-        </BottomSheet >
-    );
+        </BottomSheet>
+        <BottomSheet mobilePage isOpen={isOpen && panel === 'group'} onClose={() => setPanel(null)} title="Choose a group">
+            <div className="search-field"><Search size={18}/><input aria-label="Search expense groups" placeholder="Search groups" value={query} onChange={e => setQuery(e.target.value)}/></div>
+            <div className="expense-group-options">{availableGroups.filter(group => group.name.toLowerCase().includes(query.trim().toLowerCase())).map(group => <button type="button" key={group.id} aria-pressed={selectedGrp === group.id} onClick={() => { setSelectedGrp(group.id); setIncluded(null); form.setUnequal({}); form.setShares({}); form.setPaidBy(user.id); setMultiplePayers(false); setPayerIds([]); setPayerAmounts({}); setPanel(null); }}><span className="group-icon-surface"><GroupIcon icon={group.icon} type={group.type}/></span><span>{group.name}<small>{group.members?.length || 0} members</small></span>{selectedGrp === group.id && <Check size={18}/>}</button>)}</div>
+            {!availableGroups.some(group => group.name.toLowerCase().includes(query.trim().toLowerCase())) && <p className="field-help">{availableGroups.length ? 'No groups match that name.' : 'Create a group from Friends to start sharing.'}</p>}
+        </BottomSheet>
+        <BottomSheet mobilePage isOpen={isOpen && panel === 'payer'} onClose={() => setPanel(null)} title="Who paid?">
+            {!multiplePayers ? <>
+                <div className="expense-member-list">{payers.map(p => <button type="button" className="expense-member" key={p.id} aria-pressed={form.paidBy === p.id} onClick={() => { form.setPaidBy(p.id); setPanel(null); }}><Avatar initials={p.initials} size={34}/><span>{name(p)}</span>{form.paidBy === p.id && <Check size={20}/>}</button>)}</div>
+                <button type="button" className="multiple-payers-button" onClick={() => { setMultiplePayers(true); setPayerIds([...new Set([form.paidBy, ...people.map(p => p.id)])]); setPayerAmounts({}); }}><Users size={17}/>Multiple people paid</button>
+            </> : <section className="payer-editor">
+                <p className="field-help">Select who paid. Enter their contributions; blank fields divide the rest automatically.</p>
+                {payers.map(p => { const selected = payerIds.includes(p.id); const calculated = contributions.splits.find(s => s.userId === p.id)?.amount; return <div className="expense-member" key={p.id}><label className="participant-check"><input type="checkbox" checked={selected} onChange={() => setPayerIds(ids => selected ? ids.filter(id => id !== p.id) : [...ids,p.id])}/><span>{name(p)}<small>{selected ? payerAmounts[p.id] == null || payerAmounts[p.id] === '' ? 'Auto remainder' : 'Fixed contribution' : 'Did not pay'}</small></span></label>{selected && <div className="split-number"><span>Rs.</span><input aria-label={`${name(p)} paid amount`} type="number" min="0" step=".01" inputMode="decimal" value={payerAmounts[p.id] ?? ''} placeholder={calculated?.toFixed(2) || 'Auto'} onChange={e => setPayerAmounts({...payerAmounts,[p.id]:e.target.value})}/></div>}</div>; })}
+                {payerError && <p className="form-error" role="status">{payerError}</p>}
+                <button type="button" className="button-primary" disabled={!!payerError} onClick={() => setPanel(null)}>Done</button>
+                <button type="button" className="multiple-payers-button" onClick={() => setMultiplePayers(false)}>One person paid</button>
+            </section>}
+        </BottomSheet>
+        <BottomSheet mobilePage isOpen={isOpen && panel === 'split'} onClose={() => setPanel(null)} title="Who’s sharing?">
+            <section className="split-editor" aria-label="Split the bill">
+                <div className="split-tabs">{[{id:'equal',label:'Equally',Icon:Equal},{id:'unequal',label:'Exact amounts',Icon:Scale},{id:'shares',label:'By shares',Icon:Hash}].map(({id,label,Icon}) => <button key={id} type="button" aria-pressed={form.splitType === id} onClick={() => form.setSplitType(id)}><Icon size={19}/>{label}</button>)}</div>
+                <p className="split-description">{form.splitType === 'equal' ? 'Tick only the people involved in this bill.' : form.splitType === 'unequal' ? 'Enter an amount to fix it. Blank fields split the rest automatically. Clear a field to return to Auto.' : 'Two shares pays twice as much as one. Zero shares means nothing to pay.'}</p>
+                <div className="search-field"><Search size={18}/><input aria-label="Search participants" placeholder="Find someone" value={query} onChange={e => setQuery(e.target.value)}/></div>
+                <div className="participant-shortcuts"><span>{people.length} selected</span><button type="button" onClick={() => setIncluded(candidates.map(p => p.id))}>Select all</button><button type="button" onClick={() => setIncluded([])}>Clear</button>{form.splitType === 'unequal' && <button type="button" onClick={() => form.setUnequal({})}>Reset amounts</button>}</div>
+                {candidates.filter(p => name(p).toLowerCase().includes(query.toLowerCase())).map(p => {
+                    const selected = people.some(person => person.id === p.id);
+                    const calculated = splits.find(s => s.userId === p.id)?.amount;
+                    const automatic = form.unequal[p.id] == null || form.unequal[p.id] === '';
+                    return <div className={`split-row participant-split-row${selected ? '' : ' excluded'}`} key={p.id}>
+                        <label className="participant-check"><input type="checkbox" checked={selected} onChange={() => togglePerson(p.id)}/><span>{name(p)}<small>{!selected ? 'Not involved' : form.splitType === 'unequal' ? automatic ? `Auto · ${calculated == null ? '—' : `Rs. ${calculated.toFixed(2)}`}` : 'Fixed amount' : form.splitType === 'shares' ? `Rs. ${(calculated || 0).toFixed(2)}` : p.id === form.paidBy ? 'Paid the bill' : 'Share of the bill'}</small></span></label>
+                        {selected && (form.splitType === 'equal' ? <strong>Rs. {(calculated || 0).toFixed(2)}</strong> : <div className="split-number"><span>{form.splitType === 'shares' ? '×' : 'Rs.'}</span><input type="number" inputMode="decimal" min="0" step={form.splitType === 'shares' ? 'any' : '.01'} aria-label={`${name(p)} ${form.splitType === 'shares' ? 'shares' : 'amount'}`} value={form.splitType === 'shares' ? (form.shares[p.id] ?? 1) : (form.unequal[p.id] ?? '')} placeholder={form.splitType === 'unequal' ? (calculated?.toFixed(2) ?? 'Auto') : '0'} onChange={e => form.splitType === 'shares' ? form.setShares({...form.shares,[p.id]:e.target.value}) : form.setUnequal({...form.unequal,[p.id]:e.target.value})}/></div>)}
+                    </div>;
+                })}
+                {candidates.length > 0 && !candidates.some(p => name(p).toLowerCase().includes(query.toLowerCase())) && <p className="field-help">No matching people.</p>}
+                {!candidates.length && <p className="field-help">{mode === 'group' ? 'Choose a group first.' : 'Add a friend to start sharing expenses.'}</p>}
+                <div className={`split-summary${splitError ? ' invalid' : ''}`} aria-live="polite"><span>{splitError || 'Everything adds up'}</span><strong>Rs. {form.total.toFixed(2)}</strong></div>
+                <button type="button" className="button-primary" onClick={() => setPanel(null)}>Done</button>
+            </section>
+        </BottomSheet>
+    </>;
 }
 
 
@@ -473,10 +459,10 @@ function ExpenseList({ expenses, onDelete, onEdit, emptyTip, user }) {
                                                         {!isPayment && <details className="entry-breakdown">
                                                             <summary>View split · {item.splits?.length || 0} people</summary>
                                                             <div className="split-total"><span>Bill total</span><strong>Rs. {fmt(item.amount)}</strong></div>
-                                                            <div className="split-total"><span>Paid by</span><strong>{item.paidByName}</strong></div>
+                                                            <div className="split-total"><span>Paid by</span><strong>{item.paidByName}</strong></div>{item.payers?.map(p => <div className="split-person" key={p.userId}><span>{p.userId === user.id ? 'You' : p.name} paid</span><strong>Rs. {fmt(p.amount)}</strong></div>)}
                                                             <div className="split-total"><span>Expense date</span><strong>{new Date(item.date).toLocaleDateString('en-IN', {day:'numeric',month:'short',year:'numeric'})}</strong></div>
                                                             {(item.splits || []).map(split => <div className="split-person" key={split.userId}>
-                                                                <span>{split.userId === user?.id ? 'You' : split.name}<small>{split.userId === item.paidBy ? 'Paid the bill' : split.isPaid ? 'Settled' : `Rs. ${fmt(Math.max(0, split.amount - (Number(split.paidAmount) || 0)))} remaining`}</small></span>
+                                                                <span>{split.userId === user?.id ? 'You' : split.name}<small>{!item.payers?.length && split.userId === item.paidBy ? 'Paid the bill' : split.isPaid ? 'Nothing remaining' : `Rs. ${fmt(split.remainingAmount ?? Math.max(0, split.amount - (Number(split.paidAmount) || 0)))} remaining`}</small></span>
                                                                 <strong>Rs. {fmt(split.amount)}</strong>
                                                             </div>)}
                                                         </details>}
@@ -496,7 +482,7 @@ function ExpenseList({ expenses, onDelete, onEdit, emptyTip, user }) {
 
 
 function AddFriendSheet({ isOpen, onClose, onAdded }) {
-    const { searchByPhone, addFriend } = useApp();
+    const { searchByPhone, addFriend, user } = useApp();
     const [phone, setPhone] = useState('');
     const [result, setResult] = useState(null);
     const [added, setAdded] = useState(false);
@@ -547,7 +533,7 @@ function AddFriendSheet({ isOpen, onClose, onAdded }) {
 
     return <BottomSheet isOpen={isOpen} onClose={onClose} title="Add a friend">
         <div className="connection-intro"><span className="connection-icon"><UserPlus size={24}/></span><div><h3>Start with someone you know</h3><p>Find them using the number they saved on Blip.</p></div></div>
-        <div className="connection-form"><label className="input-label">Their phone number</label><PhoneInput value={phone} onChange={value => { setPhone(value); setResult(null); setAdded(false); setError(''); }}/><p className="field-help">Choose their country first, then enter their number.</p>
+        <div className="connection-form"><label className="input-label">Their phone number</label><PhoneInput value={phone} countryPhone={user.phone} onChange={value => { setPhone(value); setResult(null); setAdded(false); setError(''); }}/><p className="field-help">Use their saved Blip number. Change the suggested country code if needed.</p>
         <button className="button-primary connection-submit" disabled={!phoneNumber(phone) || searching || adding} onClick={handleSearch}><Search size={17}/>{searching ? 'Finding your friend…' : 'Find friend'}</button></div>
         {error && <p className="form-error" role="alert">{error}</p>}
         {result?.found && <div className="friend-search-result" role="status"><Avatar initials={result.user.name.substring(0,2)} size={44}/><div><strong>{result.user.name}</strong><small>Ready to split with you</small></div><button className="button-primary" disabled={adding || added} onClick={handleAdd}>{adding ? 'Adding…' : added ? 'Added' : 'Add'}{added ? <Check size={16}/> : <Plus size={16}/>}</button></div>}
@@ -560,7 +546,7 @@ function AddFriendSheet({ isOpen, onClose, onAdded }) {
 function CreateGroupSheet({ isOpen, onClose, allFriends = [], onGroupCreated }) {
     const { createGroup } = useApp();
     const [name, setName] = useState('');
-    const [icon, setIcon] = useState('🏠');
+    const [icon, setIcon] = useState('general');
     const [search, setSearch] = useState('');
     const [selected, setSelected] = useState([]);
     const [saving, setSaving] = useState(false);
@@ -570,9 +556,9 @@ function CreateGroupSheet({ isOpen, onClose, allFriends = [], onGroupCreated }) 
         if (!name.trim() || saving) return;
         setSaving(true); setError('');
         try {
-            await createGroup({ name: name.trim(), icon, memberIds: selected });
+            await createGroup({ name: name.trim(), icon, type: icon, memberIds: selected });
             onGroupCreated?.();
-            setName(''); setSelected([]); setSearch(''); setIcon('🏠');
+            setName(''); setSelected([]); setSearch(''); setIcon('general');
             onClose();
         } catch (err) { setError(err.message || 'Could not create this group. Please try again.'); }
         finally { setSaving(false); }
@@ -580,8 +566,8 @@ function CreateGroupSheet({ isOpen, onClose, allFriends = [], onGroupCreated }) 
     return <BottomSheet isOpen={isOpen} onClose={onClose} title="Create a group">
         <div className="connection-intro"><span className="connection-icon"><Users size={24}/></span><div><h3>Your people. One shared tab.</h3><p>Keep a trip, a home, or a shared plan together.</p></div></div>
         <label className="input-label" htmlFor="new-group-name">Group name</label>
-        <div className="search-field"><span aria-hidden="true">{icon}</span><input id="new-group-name" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Goa weekend" maxLength={100}/></div>
-        <details className="group-icon-disclosure"><summary>Choose a group icon <span aria-hidden="true">{icon}</span></summary><div className="group-icon-picker" aria-label="Group icon">{GROUP_ICONS.map(emoji => <button type="button" key={emoji} aria-label={`Group icon ${emoji}`} aria-pressed={icon === emoji} onClick={() => setIcon(emoji)}>{emoji}</button>)}</div></details>
+        <div className="search-field"><GroupIcon icon={icon}/><input id="new-group-name" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Goa weekend" maxLength={100}/></div>
+        <details className="group-icon-disclosure"><summary aria-label="Choose group icon"><GroupIcon icon={icon}/><ChevronDownIcon size={15}/></summary><GroupCategoryPicker value={icon} onChange={setIcon}/></details>
         <div className="group-members-heading"><h3>Who’s joining?</h3><span>{selected.length + 1} {selected.length ? 'members' : 'member'} including you</span></div>
         <p className="field-help">You’re already in. Select friends below to add them.</p>
         {allFriends.length > 0 ? <><div className="search-field"><Search size={18}/><input aria-label="Search group members" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search your friends"/></div><div className="group-member-options">{matches.map(friend => <button type="button" key={friend.id} aria-pressed={selected.includes(friend.id)} onClick={() => setSelected(ids => ids.includes(friend.id) ? ids.filter(id => id !== friend.id) : [...ids, friend.id])}><Avatar initials={friend.initials} size={35}/><span>{friend.name}</span>{selected.includes(friend.id) ? <Check size={19}/> : <Plus size={19}/>}</button>)}</div>{!matches.length && <p className="field-help">No friends match that name.</p>}</> : <p className="privacy-note">You can create this group now. Then use Add friend on the Friends page and invite them from your group settings.</p>}
@@ -590,15 +576,31 @@ function CreateGroupSheet({ isOpen, onClose, allFriends = [], onGroupCreated }) 
     </BottomSheet>;
 }
 
+function FriendConnection({ person }) {
+    const { user, friends = [], addFriend } = useApp();
+    const [busy, setBusy] = useState(false);
+    const [added, setAdded] = useState(false);
+    const [error, setError] = useState('');
+    if (person.id === user.id) return <small className="member-connection-status">You</small>;
+    if (added || friends.some(friend => friend.id === person.id)) return <small className="member-connection-status"><Check size={13}/>Friend</small>;
+    return <div className="member-connect"><button type="button" aria-label={`Add ${person.name} as a friend`} disabled={busy} onClick={async () => {
+        if (busy) return;
+        setBusy(true); setError('');
+        try { await addFriend(person.id); setAdded(true); }
+        catch (err) { setError(err.message || 'Could not add friend. Try again.'); }
+        finally { setBusy(false); }
+    }}><UserPlus size={15}/>{busy ? 'Adding…' : 'Add friend'}</button>{error && <small role="alert">{error}</small>}</div>;
+}
+
 // ── Group settings sheet ──────────────────────────────────────────────────────
 function GroupSettingsSheet({ isOpen, onClose, group, allFriends = [], onSave, onRemoveMember, onAddMember, onDeleteGroup }) {
     const { user } = useApp();
     const [name,setName] = useState('');
-    const [icon,setIcon] = useState('🏠');
+    const [icon,setIcon] = useState('general');
     const [search,setSearch] = useState('');
     const [busy,setBusy] = useState(false);
     const [error,setError] = useState('');
-    useEffect(()=>{ if(isOpen){setName(group?.name || '');setIcon(group?.icon || '🏠');setSearch('');setError('');} },[isOpen,group?.id]);
+    useEffect(()=>{ if(isOpen){setName(group?.name || '');setIcon(groupCategory(group?.icon, group?.type));setSearch('');setError('');} },[isOpen,group?.id]);
     const members = group?.members || [];
     const candidates = allFriends.filter(person=>!members.some(member=>member.id===person.id) && person.name.toLowerCase().includes(search.toLowerCase()));
     const run = async action => { if(busy)return;setBusy(true);setError('');try{await action();}catch(err){setError(err.message || 'Could not save this change.');}finally{setBusy(false);} };
@@ -606,10 +608,10 @@ function GroupSettingsSheet({ isOpen, onClose, group, allFriends = [], onSave, o
         <div className="settings-form">
             <div className="panel-intro"><span className="panel-icon"><Users size={22}/></span><div><h3>Your group, together</h3><p>Update the details and manage your people.</p></div></div>
             <label className="panel-field"><span>Group name</span><input value={name} onChange={event=>setName(event.target.value)} placeholder="e.g. Pokhara weekend" maxLength={100}/></label>
-            <details className="group-icon-disclosure"><summary>Group icon <span>{icon}</span></summary><div className="group-icon-picker">{GROUP_ICONS.map(value=><button key={value} aria-label={`Group icon ${value}`} aria-pressed={icon===value} onClick={()=>setIcon(value)}>{value}</button>)}</div></details>
+            <details className="group-icon-disclosure"><summary aria-label="Choose group icon"><GroupIcon icon={icon}/><ChevronDownIcon size={15}/></summary><GroupCategoryPicker value={icon} onChange={setIcon}/></details>
             <button className="button-primary" disabled={busy || !name.trim()} onClick={()=>run(async()=>{await onSave(group.id,{name:name.trim(),icon});onClose();})}>{busy?'Saving…':'Save changes'}</button>
             <div className="panel-section-title"><h3>Members</h3><span>{members.length} people</span></div>
-            <div className="settings-members">{members.map(person=><div key={person.id}><Avatar initials={person.initials} size={36}/><span>{person.id===user.id?'You':person.name}</span>{person.id!==user.id && <button className="member-remove" aria-label={`Remove ${person.name}`} disabled={busy} onClick={()=>run(()=>onRemoveMember(group.id,person.id))}><UserMinus size={17}/></button>}</div>)}</div>
+            <div className="settings-members">{members.map(person=><div key={person.id}><Avatar initials={person.initials} size={36}/><span>{person.id===user.id?'You':person.name}</span><FriendConnection person={person}/>{person.id!==user.id && <button className="member-remove" aria-label={`Remove ${person.name}`} disabled={busy} onClick={()=>run(()=>onRemoveMember(group.id,person.id))}><UserMinus size={17}/></button>}</div>)}</div>
             <div className="panel-section-title"><h3>Add people</h3></div>
             <div className="search-field"><Search size={17}/><input aria-label="Find friends to add" value={search} onChange={event=>setSearch(event.target.value)} placeholder="Search your friends"/></div>
             <div className="settings-candidates">{candidates.map(person=><button key={person.id} disabled={busy} onClick={()=>run(()=>onAddMember(group.id,person.id))}><Avatar initials={person.initials} size={32}/><span>{person.name}</span><Plus size={17}/></button>)}{!candidates.length && <p className="field-help">{search?'No matching friends.':'All your friends are already here. Add a new friend from the Friends tab.'}</p>}</div>
@@ -688,7 +690,7 @@ function FriendDetail({ friend, allFriends, onBack, onRemoveFriend, onRefresh })
 
             return {
                 ...e,
-                paidByName: isMe ? 'You' : e.paidByName || friend.name,
+                paidByName: e.payers?.length ? e.paidByName : isMe ? 'You' : e.paidByName || friend.name,
                 displayTitle: e.type === 'payment'
                     ? `${isMe ? 'You' : e.paidByName || friend.name} paid ${e.paidToName || friend.name}`
                     : e.desc,
@@ -772,14 +774,14 @@ function FriendDetail({ friend, allFriends, onBack, onRemoveFriend, onRefresh })
                         onClick={() => setShowAddExp(true)}
                         style={{
                             width: '100%', height: 52, background: '#202020', color: '#ffffff',
-                            borderRadius: 26, border: 'none', display: 'flex', alignItems: 'center',
+                            borderRadius: 12, border: 'none', display: 'flex', alignItems: 'center',
                             justifyContent: 'center', gap: 10, cursor: 'pointer',
                             boxShadow: '0 8px 20px rgba(0,0,0,0.1)'
                         }}
                     >
                         <Plus size={18} strokeWidth={3} color="#c9f158" />
                         <span style={{ fontSize: 14, fontWeight: 800, fontFamily: "'Montserrat', sans-serif" }}>
-                            Add Expense
+                            Add expense
                         </span>
                     </motion.button>
                 </motion.div>
@@ -856,6 +858,7 @@ function GroupDetail({ group: initialGroup, allFriends = [], onBack, onRefresh }
     const [showAddExp, setShowAddExp] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
     const [showTotals,setShowTotals]=useState(false);
+    const [showPeople,setShowPeople]=useState(false);
     const [showSettle,setShowSettle]=useState(false);
     const [loadError,setLoadError]=useState('');
     const [editingExp, setEditingExp] = useState(null);
@@ -896,7 +899,7 @@ function GroupDetail({ group: initialGroup, allFriends = [], onBack, onRefresh }
 
             const isMe = e.paidBy === user?.id || e.paidBy === 'me';
             const payerInGroup = currentGroup.members?.find(m => m.id === e.paidBy);
-            const resolvedPayerName = isMe ? 'You' : (payerInGroup?.name || e.paidByName || 'Member');
+            const resolvedPayerName = e.payers?.length ? e.paidByName : isMe ? 'You' : (payerInGroup?.name || e.paidByName || 'Member');
 
             const receiverInGroup = currentGroup.members?.find(m => m.id === e.paidTo);
             const resolvedReceiverName = e.paidTo === user?.id ? 'You' : (receiverInGroup?.name || e.paidToName || 'Member');
@@ -920,11 +923,11 @@ function GroupDetail({ group: initialGroup, allFriends = [], onBack, onRefresh }
             }}>
                 <button className="back-button" aria-label="Back to Friends" onClick={onBack}><ChevronLeft size={25}/></button>
                 <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: 20, fontWeight: 800, fontFamily: "'Montserrat', sans-serif" }}>
-                        {currentGroup.icon} {currentGroup.name}
+                    <div className="group-detail-title" style={{ fontSize: 20, fontWeight: 800, fontFamily: "'Montserrat', sans-serif" }}>
+                        <GroupIcon icon={currentGroup.icon} type={currentGroup.type}/> {currentGroup.name}
                     </div>
                 </div>
-                <button aria-label="Group settings"
+                <button className="group-settings-button" aria-label="Group settings"
                     onClick={() => setShowSettings(true)}
                     style={{
                         display: 'flex',
@@ -973,20 +976,24 @@ function GroupDetail({ group: initialGroup, allFriends = [], onBack, onRefresh }
                         onClick={() => setShowAddExp(true)}
                         style={{
                             width: '100%', height: 52, background: '#202020', color: '#ffffff',
-                            borderRadius: 28, border: 'none', display: 'flex', alignItems: 'center',
+                            borderRadius: 12, border: 'none', display: 'flex', alignItems: 'center',
                             justifyContent: 'center', gap: 10, cursor: 'pointer',
                             boxShadow: '0 8px 20px rgba(0,0,0,0.1)'
                         }}
                     >
                         <Plus size={18} strokeWidth={3} color="#c9f158" />
                         <span style={{ fontSize: 14, fontWeight: 800, fontFamily: "'Montserrat', sans-serif" }}>
-                            Add Group Expense
+                            Add expense
                         </span>
                     </motion.button>
                 </motion.div>
 
-                <div className="group-detail-actions"><button className="button-secondary" style={{fontWeight:600}} disabled={loading || !!loadError} onClick={()=>setShowSettle(true)}><Wallet size={18}/>Settle up</button><button className="button-secondary" disabled={loading || !!loadError} onClick={()=>setShowTotals(true)}><ChartNoAxesCombined size={18}/>View totals</button></div>
+                <div className="group-detail-actions"><button className="button-secondary" style={{fontWeight:600}} disabled={loading || !!loadError} onClick={()=>setShowSettle(true)}><Wallet size={18}/>Settle up</button><button className="button-secondary" disabled={loading || !!loadError} onClick={()=>setShowTotals(true)}><ChartNoAxesCombined size={18}/>View totals</button><button className="button-secondary" disabled={loading || !!loadError} onClick={()=>setShowPeople(true)}><Users size={18}/>People</button></div>
                 {loadError && <div role="alert" className="form-error">{loadError}<button className="button-secondary" onClick={async()=>{setLoading(true);const data=await syncGroupDetail(initialGroup.id);setLoadError(data?'':'Could not load this group. Please retry.');setLoading(false);}}>Retry</button></div>}
+                <BottomSheet isOpen={showPeople} onClose={()=>setShowPeople(false)} title="Group members">
+                    <p className="field-help">Already sharing a group? Add each other as friends here.</p>
+                    <div className="group-people-list">{currentGroup.members.map(person=><div key={person.id}><Avatar initials={person.initials} size={36}/><span>{person.id===user.id?'You':person.name}</span><FriendConnection person={person}/></div>)}</div>
+                </BottomSheet>
                 <BottomSheet isOpen={showTotals} onClose={()=>setShowTotals(false)} title="Group totals"><GroupTotals totals={groupTotals} groupId={currentGroup.id} userId={user.id}/></BottomSheet>
                 <SettleSheet isOpen={showSettle} onClose={()=>setShowSettle(false)} members={currentGroup.members} onConfirm={async(amount,shouldLog,payerId,receiverId)=>{
                     await settleGroup(currentGroup.id,receiverId,amount,'',false,shouldLog,payerId,receiverId);
@@ -1359,7 +1366,7 @@ export default function Friends() {
                                                         flexShrink: 0,
                                                         border: '1px solid #f0f0f0'
                                                     }}>
-                                                        {g.icon}
+                                                        <GroupIcon icon={g.icon} type={g.type} size={26}/>
                                                     </div>
 
                                                     <div style={{ flex: 1, minWidth: 0 }}>

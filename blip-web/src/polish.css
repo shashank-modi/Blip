@@ -185,3 +185,95 @@ button { color:var(--text,#202020); }
 .calendar-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }.calendar-heading strong { font-size:15px; font-weight:600; }.calendar-heading button { display:grid; place-items:center; border:1px solid #eee; background:#fafafa; border-radius:50%; width:38px; height:38px; color:#202020; }
 .calendar-days { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:5px; }.calendar-weekday { text-align:center; font-size:10px; color:#777; padding-bottom:9px; }.calendar-days button { aspect-ratio:1; border:1px solid transparent; border-radius:50%; background:transparent; color:#202020; font-size:13px; font-weight:500; padding:0; }.calendar-days button:hover { background:#f3f3ee; }.calendar-days button[aria-current=date] { border-color:#babfb0; }.calendar-days button[aria-pressed=true] { background:#c9f158; border-color:#c9f158; color:#202020; font-weight:650; }
 .activity-event-title { font-size:12px; font-weight:650; margin:0 0 6px; color:#202020; }
+.notification-intro { display:flex; align-items:center; gap:16px; margin-bottom:20px; }
+.notification-intro svg { flex-shrink:0; }
+.notification-intro p { font-size:14px; line-height:1.7; margin:0; }
+.notification-later { display:block; margin:12px auto 0; padding:12px 24px; background:none; border:0; color:var(--text-3); font:inherit; font-size:13px; cursor:pointer; }
+.contact-pick { margin-bottom:12px; }
+
+/* Neutral controls: green remains an accent, not an input surface. */
+.expense-options > button,.date-field,.panel-field > input,.panel-disclosure,.wallet-panel .form-input,.wallet-panel .payment-amount { background:#fff; border-color:#e5e5e5; color:#242424; }
+.date-icon,.date-label,.expense-form-meta .eyebrow { color:#737373; }
+.date-field:focus-within { border-color:#888; box-shadow:0 0 0 2px #2020200d; }
+.category-grid button,.panel-choices > button { background:#fff; border-color:#e5e5e5; }
+.category-grid button > span { background:#f5f5f5; }
+.category-grid button[aria-pressed=true] { background:#f5f5f5; border-color:#333; }
+.category-grid button[aria-pressed=true] > span { background:#e9e9e9; }
+.mobile-page-back,.mobile-page-save { display:none; }
+.group-settings-button { background:#fff; color:#202020; }
+@media (max-width:767px) {
+    .mobile-page-backdrop { background:#fff; backdrop-filter:none; padding:0; }
+    .mobile-page-sheet,.mobile-page-sheet.show { position:fixed; inset:0; width:100%; height:100dvh; max-width:none; max-height:none; transform:none; border-radius:0; box-shadow:none; padding:0; background:#fff; display:flex; flex-direction:column; }
+    .mobile-page-sheet > .overlay-handle { display:none; }
+    .mobile-page-sheet > .sheet-heading { min-height:68px; margin:0; padding:max(12px,env(safe-area-inset-top)) 18px 12px; border-bottom:1px solid #eee; gap:16px; }
+    .mobile-page-sheet > .sheet-heading .overlay-title { flex:1; font-size:18px; font-weight:600; letter-spacing:-.3px; }
+    .mobile-page-sheet > .sheet-heading .sheet-close { display:none; }
+    .mobile-page-back,.mobile-page-save { display:grid; place-items:center; flex-shrink:0; width:40px; height:40px; border:0; border-radius:50%; background:transparent; color:#202020; cursor:pointer; }
+    .mobile-page-save { background:#202020; color:#fff; }
+    .mobile-page-save:disabled { background:#eee; color:#aaa; cursor:default; }
+    .mobile-page-sheet > .sheet-body { padding:22px 22px max(24px,env(safe-area-inset-bottom)); }
+    .mobile-page-sheet .quick-expense-form { gap:24px; min-height:100%; padding:0; }
+    .mobile-page-sheet .expense-entry { padding:24px 0 12px; border:0; border-radius:0; background:#fff; color:#202020; box-shadow:none; }
+    .mobile-page-sheet .field-label { color:#777; font-size:11px; font-weight:500; letter-spacing:0; text-transform:none; }
+    .mobile-page-sheet .expense-name { color:#202020; font-size:21px; font-weight:500; border-bottom:1px solid #ddd; padding-bottom:14px; margin-bottom:26px; }
+    .mobile-page-sheet .expense-amount,.mobile-page-sheet .expense-amount input { color:#202020; }
+    .mobile-page-sheet .expense-amount { padding-bottom:12px; border-bottom:1px solid #ddd; }
+    .mobile-page-sheet .expense-name::placeholder,.mobile-page-sheet .expense-amount input::placeholder { color:#b0b0b0; }
+    .mobile-page-sheet .expense-summary-rows { border:0; border-radius:0; }
+    .mobile-page-sheet .expense-summary-row { padding:15px 0; background:#fff; }
+    .mobile-page-sheet .expense-share-preview { color:#555; font-weight:400; }
+    .mobile-page-sheet .quick-expense-form > .button-primary { margin-top:auto; }
+    .mobile-page-sheet .expense-form-meta { display:flex; flex-wrap:wrap; gap:16px; }
+    .mobile-page-sheet .expense-form-meta > :first-child { flex:1; }
+    .mobile-page-sheet .expense-form-meta > .date-field { width:auto; padding:8px 10px; border-radius:10px; }
+    .mobile-page-sheet .expense-form-meta .date-label { display:none; }
+    .mobile-page-sheet .expense-form-meta .date-field strong { font-size:12px; margin:0; }
+    .mobile-page-sheet .split-editor { border:0; background:#fff; border-radius:0; }
+    .mobile-page-sheet .split-tabs { background:#f5f5f5; }
+}
+
+/* Shared action geometry and quiet, compact expense controls. */
+.button-primary,.button-secondary,.social-primary,.log-btn,
+.settings-form .button-primary,.wallet-panel > .button-primary,
+.custom-category .button-primary,.locked-bill .button-primary { border-radius:12px; }
+.log-btn { font-size:14px; letter-spacing:0; min-height:48px; }
+.expense-submit-row { display:flex; align-items:stretch; gap:10px; margin-top:12px; }
+.expense-submit-row > .button-primary,.expense-submit-row > .log-btn { flex:1; width:auto; margin:0; min-height:48px; }
+.expense-submit-row .date-field-compact,.compact-calendar { display:flex; align-items:center; justify-content:center; gap:8px; width:auto; min-width:48px; min-height:48px; padding:10px 12px; border:1px solid #e4e4e4; border-radius:12px; background:white; color:#555; font-family:inherit; font-size:12px; font-weight:500; cursor:pointer; }
+.date-field-compact .date-label,.date-field-compact > svg { display:none; }
+.date-field-compact .date-icon { width:auto; height:auto; padding:0; background:none; }
+.date-field-compact .date-field-text strong { margin:0; font-size:11px; font-weight:500; }
+.compact-calendar span { font-size:11px; }
+.view-home .expense-options { grid-template-columns:1fr; margin-bottom:14px; }
+.view-home .expense-options > button { border-radius:12px; padding:10px 12px; }
+.group-icon-disclosure { padding:12px 0 18px; }
+.group-icon-disclosure summary { width:60px; min-height:44px; justify-content:center; gap:8px; padding:9px; border:1px solid #e4e4e4; border-radius:12px; background:#fff; }
+.group-category-picker { grid-template-columns:repeat(6,minmax(0,1fr)); gap:7px; padding-top:12px; }
+.group-category-picker button { min-height:46px; padding:10px 0; border-radius:10px; }
+.wallet-list-card { width:100%; padding:8px 16px!important; border:1px solid #e9e9e5; border-radius:18px!important; background:#fff!important; box-shadow:none!important; overflow:hidden; }
+.wallet-payment-row { min-height:76px; padding:14px 0!important; margin:0!important; }
+.wallet-payment-row .profile-row-text { min-width:0; }
+.wallet-payment-row .profile-row-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wallet-payment-row > span:last-child { flex-shrink:0; }
+.wallet-top-row { display:flex; align-items:center; gap:12px; border-bottom:1px solid #e9e9e5; }
+.wallet-top-row:last-child { border-bottom:0; }
+.wallet-rank { display:grid; place-items:center; flex-shrink:0; width:40px; height:40px; border:1px solid #e6e6e6; border-radius:12px; color:#777; font-size:13px; }
+.wallet-top-row > div { flex:1; min-width:0; }
+.wallet-top-row strong { display:block; font-size:14px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wallet-top-row small { display:block; font-size:11px; color:#777; margin-top:5px; }
+.wallet-top-row > b { font-size:14px; font-weight:700; white-space:nowrap; }
+.view-home .wallet-empty-card { box-sizing:border-box; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:220px; padding:24px!important; margin-top:0!important; border-radius:18px!important; }
+.view-home .wallet-empty-card > div { margin-top:0!important; padding:0!important; }
+.view-home .wallet-empty-card > span { width:48px; height:48px; }
+.mobile-page-sheet .quick-expense-form > .expense-submit-row { margin-top:auto; padding-top:12px; }
+.multiple-payers-button { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; margin-top:20px; padding:13px; border:1px solid #e4e4e4; border-radius:12px; background:white; color:#444; font:inherit; font-size:13px; cursor:pointer; }
+.payer-editor .split-number { display:flex; align-items:center; gap:5px; font-size:12px; }
+.payer-editor .split-number input { width:90px; padding:10px; border:1px solid #ddd; border-radius:9px; font-size:16px; text-align:right; }
+.payer-editor .expense-member > span small { display:block; font-size:11px; color:#777; margin-top:5px; }
+.payer-editor > .button-primary { width:100%; margin-top:18px; }
+.view-home .recent-expenses { padding:0; background:transparent; border-radius:0; box-shadow:none; }
+.view-home .amount-input-row { border-radius:14px; }
+
+.payer-editor .split-number { border:0; background:none; box-shadow:none; padding:0; }
+.payer-editor .split-number:focus-within { border:0; box-shadow:none; }
+.payer-editor .split-number input:focus { outline:2px solid #444; outline-offset:2px; }

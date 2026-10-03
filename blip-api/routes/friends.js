@@ -1,3 +1,4 @@
+import { expenseDebts } from '../utils/expenseDebts.js';
 import express from 'express';
 import { requireAuth, getUserId } from '../middleware/auth.js';
 import { query } from '../db/client.js';
@@ -296,7 +297,7 @@ router.get('/groups/:id', async (req, res, next) => {
                         -- Actual Bills
                         SELECT 
                             e.id, e.group_id, (SELECT name FROM groups WHERE id=e.group_id) AS group_name, e.description, e.amount, e.created_at, 'expense' as type,
-                            u.name as paid_by_name
+                            COALESCE((SELECT string_agg(pu.name, ' & ' ORDER BY pu.name) FROM expense_payers ep JOIN users pu ON pu.id=ep.user_id WHERE ep.expense_id=e.id), u.name) as paid_by_name
                         FROM group_expenses e
                         JOIN users u ON e.paid_by = u.id
                         WHERE e.group_id = g.id
@@ -354,7 +355,7 @@ router.get('/groups/:id/totals', async (req, res, next) => {
             UNION SELECT paid_by FROM group_expenses WHERE group_id=$1
             UNION SELECT s.user_id FROM expense_splits s JOIN group_expenses e ON e.id=s.expense_id WHERE e.group_id=$1
         ) SELECT u.id, u.name,
-            COALESCE((SELECT SUM(e.amount) FROM bills e WHERE e.group_id=$1 AND e.paid_by=u.id),0) AS paid,
+            COALESCE((SELECT SUM(p.amount) FROM expense_payers p JOIN bills e ON e.id=p.expense_id WHERE p.user_id=u.id),0) + COALESCE((SELECT SUM(e.amount) FROM bills e WHERE e.paid_by=u.id AND NOT EXISTS (SELECT 1 FROM expense_payers p WHERE p.expense_id=e.id)),0) AS paid,
             COALESCE((SELECT SUM(s.amount) FROM expense_splits s JOIN bills e ON e.id=s.expense_id WHERE e.group_id=$1 AND s.user_id=u.id),0) AS share,
             COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.group_id=$1 AND p.payment_type='shadow' AND p.paid_by=u.id),0) AS settlements_paid,
             COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.group_id=$1 AND p.payment_type='shadow' AND p.paid_to=u.id),0) AS settlements_received,
@@ -483,8 +484,19 @@ const getExpenses = async (groupId, friendId, userId) => {
 
     const result = await query(q, params);
 
+    const billIds = result.rows.filter(e => e.type === 'expense').map(e => e.id);
+    const contributions = billIds.length ? (await query('SELECT p.*, u.name FROM expense_payers p JOIN users u ON u.id=p.user_id WHERE p.expense_id=ANY($1::uuid[]) ORDER BY p.user_id', [billIds])).rows : [];
+    const debts = billIds.length ? (await query('SELECT * FROM expense_debts WHERE expense_id=ANY($1::uuid[])', [billIds])).rows : [];
     return result.rows.map(e => {
-        const splits = e.splits || [];
+        const payers = contributions.filter(p => p.expense_id === e.id).map(p => ({ userId:p.user_id, name:p.user_id === userId ? 'You' : p.name, amount:Number(p.amount) }));
+        const billDebts = debts.filter(d => d.expense_id === e.id);
+        const multiple = payers.length > 0;
+        const splits = (e.splits || []).map(s => {
+            if (!multiple) return s;
+            const owed = billDebts.filter(d => d.user_id === s.userId);
+            const remaining = owed.reduce((sum,d) => sum + Number(d.amount) - Number(d.paid_amount),0);
+            return { ...s, remainingAmount:remaining, paidAmount:owed.reduce((sum,d) => sum + Number(d.paid_amount),0), isPaid:remaining < .005 };
+        });
         const mySplit = splits.find(s => s.userId === userId);
 
         return {
@@ -493,13 +505,15 @@ const getExpenses = async (groupId, friendId, userId) => {
             desc: e.desc,
             amount: parseFloat(e.amount),
             paidBy: e.paid_by,
+            payers,
+            hasAppliedPayments: multiple ? billDebts.some(d => Number(d.paid_amount) > 0) : undefined,
             paidTo: e.paid_to,
-            paidByName: e.paid_by === userId ? 'You' : e.paid_by_name,
+            paidByName: multiple ? payers.map(p => p.name).join(' & ') : e.paid_by === userId ? 'You' : e.paid_by_name,
             paidToName: e.paid_to === userId ? 'You' : (e.paid_to_name || null),
             date: e.date, createdAt: e.created_at,
             type: e.type,
             paymentType: e.payment_type,
-            isPaid: e.is_paid, // This tells the UI to show the "Settled" status
+            isPaid: multiple ? billDebts.every(d => Number(d.amount) === Number(d.paid_amount)) : e.is_paid, // This tells the UI to show the "Settled" status
             splits: splits.map(s => ({
                 ...s,
                 amount: parseFloat(s.amount),
@@ -507,7 +521,7 @@ const getExpenses = async (groupId, friendId, userId) => {
             })),
             yourShare: e.type === 'payment'
                 ? (e.paid_by === userId ? -parseFloat(e.amount) : (e.paid_to === userId ? parseFloat(e.amount) : 0))
-                : (mySplit ? Math.max(0, parseFloat(mySplit.amount) - parseFloat(mySplit.paidAmount || 0)) : 0)
+                : (mySplit ? (multiple ? mySplit.remainingAmount : Math.max(0, parseFloat(mySplit.amount) - parseFloat(mySplit.paidAmount || 0))) : 0)
         };
     });
 };
@@ -536,13 +550,18 @@ const saveExpense = async (groupId, req, res, next, expenseIdToUpdate = null) =>
         const userId = getUserId(req);
         const { description, paidBy, date } = req.body;
         const amount = cents(req.body.amount) / 100;
-        const payer = paidBy === 'me' ? userId : paidBy;
+        if (req.body.payers != null && (!Array.isArray(req.body.payers) || req.body.payers.some(p => !p || typeof p !== 'object'))) fail('Invalid payers');
+        const contributions = req.body.payers == null ? null : req.body.payers.map(p => ({ userId:p.userId === 'me' ? userId : p.userId, amount:p.amount }));
+        const payer = contributions?.[0]?.userId || (paidBy === 'me' ? userId : paidBy);
         if (typeof description !== 'string' || !description.trim()) fail('Description required');
         if (date && !Number.isFinite(Date.parse(date))) fail('Invalid date');
         if (!Array.isArray(req.body.splits) || !req.body.splits.length) fail('Splits required');
         const splits = req.body.splits.map(s => ({ userId: (s.userId || s.user_id) === 'me' ? userId : (s.userId || s.user_id), amount: cents(s.amount, true) / 100 }));
         if (new Set(splits.map(s => s.userId)).size !== splits.length) fail('Duplicate split participant');
         if (splits.reduce((n, s) => n + cents(s.amount, true), 0) !== cents(amount)) fail('Splits must equal the expense total');
+        const debts = contributions ? expenseDebts(amount, splits, contributions) : [];
+        // Payers who consumed nothing remain participants, with a zero share.
+        for (const p of contributions || []) if (!splits.some(s => s.userId === p.userId)) splits.push({userId:p.userId, amount:0});
         const id = await transaction(async query => {
             let targetGroup = groupId;
             let existing;
@@ -553,7 +572,7 @@ const saveExpense = async (groupId, req, res, next, expenseIdToUpdate = null) =>
                 const participants = await query('SELECT user_id FROM expense_splits WHERE expense_id = $1', [expenseIdToUpdate]);
                 if (!targetGroup && existing.paid_by !== userId && !participants.rows.some(s => s.user_id === userId)) fail('Access denied', 403);
                 const paid = await query('SELECT 1 FROM expense_splits WHERE expense_id = $1 AND user_id != $2 AND amount > 0 AND (paid_amount > 0 OR is_paid = TRUE)', [expenseIdToUpdate, existing.paid_by]);
-                if (paid.rows.length) fail('This bill has payments applied. Undo its payments from the bill history, edit the bill, then record the payments again.', 409);
+                if (paid.rows.length || (await query('SELECT 1 FROM expense_debts WHERE expense_id=$1 AND paid_amount>0', [expenseIdToUpdate])).rows.length) fail('This bill has payments applied. Undo its payments from the bill history, edit the bill, then record the payments again.', 409);
             }
             let allowed;
             if (targetGroup) {
@@ -577,8 +596,12 @@ const saveExpense = async (groupId, req, res, next, expenseIdToUpdate = null) =>
             } else {
                 expenseId = (await query('INSERT INTO group_expenses (group_id, paid_by, amount, description, date) VALUES ($1,$2,$3,$4,COALESCE($5::timestamptz,NOW())) RETURNING id', [targetGroup, payer, amount, description.trim(), date])).rows[0].id;
             }
+            await query('DELETE FROM expense_debts WHERE expense_id=$1', [expenseId]);
+            await query('DELETE FROM expense_payers WHERE expense_id=$1', [expenseId]);
+            for (const p of contributions || []) await query('INSERT INTO expense_payers (expense_id,user_id,amount) VALUES ($1,$2,$3)', [expenseId,p.userId,p.amount]);
+            for (const d of debts) await query('INSERT INTO expense_debts (expense_id,user_id,paid_by,amount) VALUES ($1,$2,$3,$4)', [expenseId,d.userId,d.paidBy,d.amount]);
             for (const split of splits) {
-                const paid = split.userId === payer || split.amount === 0;
+                const paid = (!contributions && split.userId === payer) || split.amount === 0;
                 await query('INSERT INTO expense_splits (expense_id, user_id, amount, is_paid, paid_amount) VALUES ($1,$2,$3,$4,$5)', [expenseId, split.userId, split.amount, paid, paid ? split.amount : 0]);
             }
             await notify(query, userId, targetGroup ? await groupRecipients(query,targetGroup) : [payer, ...splits.map(s => s.userId)], existing ? 'expense_updated' : 'expense', `${existing ? 'updated' : 'added'} “${description.trim()}”.`, { expenseId, groupId: targetGroup, amount, description: description.trim(), scope: 'shared' });
@@ -627,7 +650,7 @@ router.delete('/social-expenses/:id', async (req, res, next) => {
             return res.status(403).json({ error: 'You are not part of this transaction' });
         }
         const settled = await query('SELECT 1 FROM expense_splits WHERE expense_id = $1 AND user_id != $2 AND amount > 0 AND (paid_amount > 0 OR is_paid = TRUE)', [id, expense.paid_by]);
-        if (settled.rows.length) return res.status(409).json({ error: 'This bill has payments applied. Undo its payments from the bill history before deleting the bill.' });
+        if (settled.rows.length || (await query('SELECT 1 FROM expense_debts WHERE expense_id=$1 AND paid_amount>0', [id])).rows.length) return res.status(409).json({ error: 'This bill has payments applied. Undo its payments from the bill history before deleting the bill.' });
         await transaction(async query => {
             const entry = (await query('SELECT description, amount FROM group_expenses WHERE id=$1 FOR UPDATE', [id])).rows[0];
             const participants = (await query('SELECT user_id FROM expense_splits WHERE expense_id=$1', [id])).rows.map(s => s.user_id);
@@ -652,8 +675,9 @@ router.delete('/social-payments/:id', async (req, res, next) => {
             else if (![payment.paid_by, payment.paid_to, payment.recorded_by].includes(userId)) fail('Unauthorized', 403);
             if (payment.payment_type === 'shadow') fail('Undo this settlement from the friend activity', 409);
             const allocations = await query('SELECT * FROM settlement_allocations WHERE payment_id = $1', [payment.id]);
-            if (!allocations.rows.length && !payment.recorded_by) fail('This legacy settlement cannot be safely undone automatically', 409);
-            const groups = await query('SELECT DISTINCT e.group_id FROM settlement_allocations a JOIN expense_splits s ON s.id=a.split_id JOIN group_expenses e ON e.id=s.expense_id WHERE a.payment_id=$1 AND e.group_id IS NOT NULL UNION SELECT group_id FROM settlement_credits WHERE payment_id=$1 AND group_id IS NOT NULL ORDER BY group_id',[payment.id]);
+            const debtAllocations = await query('SELECT * FROM debt_settlement_allocations WHERE payment_id=$1', [payment.id]);
+            if (!allocations.rows.length && !debtAllocations.rows.length && !payment.recorded_by) fail('This legacy settlement cannot be safely undone automatically', 409);
+            const groups = await query('SELECT DISTINCT e.group_id FROM settlement_allocations a JOIN expense_splits s ON s.id=a.split_id JOIN group_expenses e ON e.id=s.expense_id WHERE a.payment_id=$1 AND e.group_id IS NOT NULL UNION SELECT e.group_id FROM debt_settlement_allocations a JOIN expense_debts d ON d.id=a.debt_id JOIN group_expenses e ON e.id=d.expense_id WHERE a.payment_id=$1 AND e.group_id IS NOT NULL UNION SELECT group_id FROM settlement_credits WHERE payment_id=$1 AND group_id IS NOT NULL ORDER BY group_id',[payment.id]);
             for (const { group_id } of groups.rows) {
                 await groupForChange(query,group_id,userId);
                 const members=await groupRecipients(query,group_id);
@@ -662,6 +686,7 @@ router.delete('/social-payments/:id', async (req, res, next) => {
             for (const allocation of allocations.rows) {
                 await query('UPDATE expense_splits SET paid_amount = GREATEST(0, paid_amount - $1), is_paid = FALSE, settlement_id = NULL WHERE id = $2', [allocation.amount, allocation.split_id]);
             }
+            for (const allocation of debtAllocations.rows) await query('UPDATE expense_debts SET paid_amount=paid_amount-$1 WHERE id=$2', [allocation.amount,allocation.debt_id]);
             await query('DELETE FROM group_payments WHERE id = $1', [payment.id]);
             await notify(query, userId, payment.group_id ? await groupRecipients(query,payment.group_id) : [payment.paid_by, payment.paid_to], 'settlement_undone', 'undid a settlement. Your balance has been updated.', { amount: Number(payment.amount), paymentId: payment.id, groupId:payment.group_id, payer:payment.paid_by, receiver:payment.paid_to, scope: 'shared' });
         });
@@ -787,19 +812,29 @@ const settle = async (req, res, next, groupId = null) => {
             const unpaid = await query(`SELECT s.id, s.amount, s.paid_amount, e.group_id, e.paid_by
                 FROM expense_splits s JOIN group_expenses e ON s.expense_id = e.id
                 WHERE ((e.paid_by = $1 AND s.user_id = $2) OR (e.paid_by = $2 AND s.user_id = $1))
-                AND s.is_paid = FALSE AND ($3::uuid IS NULL OR e.group_id = $3)
+                AND s.is_paid = FALSE AND NOT EXISTS (SELECT 1 FROM expense_payers p WHERE p.expense_id=e.id) AND ($3::uuid IS NULL OR e.group_id = $3)
                 ORDER BY e.date, s.id FOR UPDATE OF s`, [pairUser, friendId, groupId]);
+            const multiDebts = await query(`SELECT d.id,d.amount,d.paid_amount,e.group_id,d.paid_by,TRUE AS multi
+                FROM expense_debts d JOIN group_expenses e ON e.id=d.expense_id
+                WHERE ((d.paid_by=$1 AND d.user_id=$2) OR (d.paid_by=$2 AND d.user_id=$1))
+                AND d.amount>d.paid_amount AND ($3::uuid IS NULL OR e.group_id=$3)
+                ORDER BY e.date,d.id FOR UPDATE OF d`, [pairUser,friendId,groupId]);
             const net = (await query(`SELECT COALESCE(SUM(CASE WHEN paid_by=$1 THEN amount ELSE -amount END),0) AS net
                 FROM blip_balance_entries WHERE ((paid_by=$1 AND user_id=$2) OR (paid_by=$2 AND user_id=$1))
                 AND ($3::uuid IS NULL OR group_id=$3)`, [pairUser,friendId,groupId])).rows[0].net;
             const payerId = req.body.payerId || (Number(net) > 0 ? friendId : pairUser);
-            const plan = allocateSettlement(unpaid.rows, pairUser, friendId, amount, payerId);
+            const plan = allocateSettlement([...unpaid.rows, ...multiDebts.rows], pairUser, friendId, amount, payerId);
             plan.direction = plan.payer === userId ? 'paid' : plan.receiver === userId ? 'received' : 'recorded';
             const masterId = (await query("INSERT INTO group_payments (paid_by, paid_to, amount, payment_type, recorded_by, group_id) VALUES ($1,$2,$3,'master',$4,$5) RETURNING id", [plan.payer, plan.receiver, amount, userId, groupId])).rows[0].id;
             const shadows = new Map();
             for (const allocation of plan.allocations) {
-                await query('INSERT INTO settlement_allocations (payment_id, split_id, amount) VALUES ($1,$2,$3)', [masterId, allocation.id, allocation.applied]);
-                await query('UPDATE expense_splits SET paid_amount = paid_amount + $1, is_paid = (paid_amount + $1 >= amount), settlement_id = $2 WHERE id = $3', [allocation.applied, masterId, allocation.id]);
+                if (allocation.multi) {
+                    await query('INSERT INTO debt_settlement_allocations (payment_id,debt_id,amount) VALUES ($1,$2,$3)', [masterId,allocation.id,allocation.applied]);
+                    await query('UPDATE expense_debts SET paid_amount=paid_amount+$1 WHERE id=$2', [allocation.applied,allocation.id]);
+                } else {
+                    await query('INSERT INTO settlement_allocations (payment_id, split_id, amount) VALUES ($1,$2,$3)', [masterId, allocation.id, allocation.applied]);
+                    await query('UPDATE expense_splits SET paid_amount = paid_amount + $1, is_paid = (paid_amount + $1 >= amount), settlement_id = $2 WHERE id = $3', [allocation.applied, masterId, allocation.id]);
+                }
                 if (allocation.group_id) shadows.set(allocation.group_id, (shadows.get(allocation.group_id) || 0) + cents(allocation.applied));
             }
             const addCredit = async (creditGroup, creditCents) => {

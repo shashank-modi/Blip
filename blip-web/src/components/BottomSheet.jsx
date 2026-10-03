@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
-export default function BottomSheet({ isOpen, onClose, title, children }) {
+import { X, ArrowLeft, Check } from 'lucide-react';
+export default function BottomSheet({ isOpen, onClose, title, children, mobilePage = false, mobileAction = null }) {
     const panel = useRef(null);
     const close = useRef(onClose);
     close.current = onClose;
@@ -26,10 +26,15 @@ export default function BottomSheet({ isOpen, onClose, title, children }) {
         return () => { clearTimeout(timer); document.removeEventListener('keydown', handleKey); if (previous?.isConnected) previous.focus(); };
     }, [isOpen]);
     if (!isOpen) return null;
-    return createPortal(<div className="overlay-backdrop show" onClick={onClose}>
-        <div ref={panel} data-blip-dialog role="dialog" aria-modal="true" aria-labelledby={title ? titleId : undefined} aria-label={title ? undefined : 'Details'} tabIndex={-1} className="overlay-sheet show" onClick={e => e.stopPropagation()}>
+    return createPortal(<div className={`overlay-backdrop show${mobilePage ? ' mobile-page-backdrop' : ''}`} onClick={onClose}>
+        <div ref={panel} data-blip-dialog role="dialog" aria-modal="true" aria-labelledby={title ? titleId : undefined} aria-label={title ? undefined : 'Details'} tabIndex={-1} className={`overlay-sheet show${mobilePage ? ' mobile-page-sheet' : ''}`} onClick={e => e.stopPropagation()}>
             <div className="overlay-handle" />
-            <div className="sheet-heading"><h2 id={titleId} className="overlay-title">{title}</h2><button type="button" className="sheet-close" aria-label="Close dialog" onClick={onClose}><X size={20} /></button></div>
+            <div className="sheet-heading">
+                {mobilePage && <button type="button" className="mobile-page-back" aria-label="Back" onClick={onClose}><ArrowLeft size={23}/></button>}
+                <h2 id={titleId} className="overlay-title">{title}</h2>
+                {mobilePage && mobileAction && <button type="button" className="mobile-page-save" aria-label={mobileAction.label} disabled={mobileAction.disabled} onClick={mobileAction.onClick}><Check size={23}/></button>}
+                <button type="button" className="sheet-close" aria-label="Close dialog" onClick={onClose}><X size={20}/></button>
+            </div>
             <div className="sheet-body">{children}</div>
         </div>
     </div>, document.body);
