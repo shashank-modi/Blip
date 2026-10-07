@@ -1,4 +1,4 @@
-import { suggestCategory } from '../utils/categories';
+import ExpenseComposer from '../components/ExpenseComposer';
 import PageHeader from '../components/PageHeader';
 import DatePicker from '../components/DatePicker';
 import { localDate } from '../utils/splits';
@@ -16,20 +16,10 @@ import { createPortal } from 'react-dom';
 
 import { CalendarDays, Receipt, Repeat, Coffee, Car, ShoppingBag, Grid, CheckCircle2, Home as HomeIcon, HeartCrack, Briefcase, Gift, ArrowUpCircle, Plus, ArrowUpRight, LayoutDashboard, ChevronRight, Clapperboard, BookHeart, Hospital, ChevronDownIcon} from 'lucide-react';
 
-const parseExpenseInput = (input) => {
-    const parts = input.trim().split(/\s+/);
-    if (parts.length === 0) return null;
-    const first = parseFloat(parts[0]);
-    if (!isNaN(first) && first > 0) return { amount: first, title: parts.slice(1).join(' ') };
-    const last = parseFloat(parts[parts.length - 1]);
-    if (!isNaN(last) && last > 0) return { amount: last, title: parts.slice(0, -1).join(' ') };
-    return null;
-};
-
 export default function Home() {
     const {
         user, expenses, monthlyExpenses, activeMonth, updateUserBudget, claimMonthlyBudgetPrompt,
-        addExpenseNLP, recurring, markRecurringPaid,
+        addExpenseNLP, addExpenses, recurring, markRecurringPaid,
         deleteRecurring, updateRecurringItem,
         addRecurring, setCurrentScreen,
         getSpentThisMonth, deleteExpense, updateExpense, addIncome,
@@ -40,7 +30,6 @@ export default function Home() {
     const [showTour, setShowTour] = useState(true);
 
 
-    const [nlpInput, setNlpInput] = useState('');
     const [selectedCat, setSelectedCat] = useState('');
     const [isPromptMonthOpen, setIsPromptMonthOpen] = useState(false);
     const [promptBudget, setPromptBudget] = useState('');
@@ -63,7 +52,6 @@ export default function Home() {
     const [editingShoppingId, setEditingShoppingId] = useState(null);
     const [editShoppingName, setEditShoppingName] = useState('');
     const [swooshingOutShoppingId, setSwooshingOutShoppingId] = useState(null);
-    const [inputFocused, setInputFocused] = useState(false);
     const [isCatSheetOpen, setIsCatSheetOpen] = useState(false);
     const [customCatInput, setCustomCatInput] = useState('');
 
@@ -74,8 +62,6 @@ export default function Home() {
     const [recDate, setRecDate] = useState('1');
     const [recParseError, setRecParseError] = useState('');
 
-    const mainPreview = parseExpenseInput(nlpInput);
-    const suggestedCategory = suggestCategory(mainPreview?.title || nlpInput, expenses);
 
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [isDateSheetOpen, setIsDateSheetOpen] = useState(false);
@@ -131,19 +117,7 @@ export default function Home() {
         setEditingRecurring(rec); // Opens the EditRecurringSheet
     };
 
-    const [savingExpense,setSavingExpense] = useState(false);
     const [savingIncome,setSavingIncome] = useState(false);
-    const handleAddExpense = async () => {
-        if (!nlpInput.trim() || savingExpense) return;
-        setSavingExpense(true);
-        let saved;
-        try { saved = await addExpenseNLP(nlpInput, selectedCat, selectedDate); }
-        finally { setSavingExpense(false); }
-        if (!saved) return;
-        setNlpInput('');
-        setSelectedCat('');
-        setSelectedDate(new Date());
-    };
 
     const handleAddIncome = async () => {
         if (!incomeAmt || savingIncome) return;
@@ -269,43 +243,10 @@ export default function Home() {
             <PageHeader title="Wallet" subtitle={`Your personal spending, ${user.name?.split(' ')[0] || 'at a glance'}.`} actions={<><button id="tour-transaction-console" aria-label="Transactions" className="button-secondary" onClick={() => setCurrentScreen('logs')}><History size={18}/><span>Transactions</span></button><button id="tour-dashboard" aria-label="Dashboard" className="button-secondary" onClick={() => setCurrentScreen('dashboard')}><LayoutDashboard size={18}/><span>Dashboard</span></button></>}/>
 
             <div className="home-content">
-                {/* LOG EXPENSE CARD */}
-                <div className="log-card" id="tour-nlp"><span className="eyebrow" style={{color:'#a8b197',marginBottom:16}}>A LITTLE SOMETHING TO LOG</span>
-                    <div className="amount-input-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', width: '100%', position: 'relative' }}>
-                            <span className="rupee-sign">Rs. </span>
-                            <input
-                                onFocus={() => setInputFocused(true)}
-                                onBlur={() => setInputFocused(false)}
-                                type="text"
-                                className="super-amount-input"
-                                placeholder="150 pizza"
-                                aria-label="Expense amount and description"
-                                value={nlpInput}
-                                onChange={e => setNlpInput(e.target.value)}
-                                onKeyDown={e => e.key === 'Enter' && handleAddExpense(e)}
-                                style={{ flex: 1, minWidth: 0 }}
-                            />
-
-                        </div>
-                        {nlpInput.trim() && (
-                            <div style={{ marginTop: 4, fontSize: 12, fontWeight: 500, color: (mainPreview && mainPreview.title) ? '#557529' : '#202020' }}>
-                                {mainPreview && mainPreview.title
-                                    ? `✓ Rs. ${mainPreview.amount.toLocaleString('en-IN')} · ${mainPreview.title}`
-                                    : mainPreview && !mainPreview.title
-                                        ? `Rs. ${mainPreview.amount.toLocaleString('en-IN')} — add a description`
-                                        : `Type amount + name in any order`}
-                            </div>
-                        )}
-                    </div>
-                    <div className="expense-options">
-                        <button type="button" onClick={()=>setIsCatSheetOpen(true)} aria-haspopup="dialog" aria-label="Choose expense category"><Grid size={18}/><span><small>{selectedCat ? 'Category' : 'Auto category'}</small>{selectedCat || suggestedCategory || 'Automatic'}</span><ChevronDownIcon size={15}/></button>
-                    </div>
-
-                    <div className="expense-submit-row"><button type="button" className="compact-calendar" onClick={()=>setIsDateSheetOpen(true)} aria-haspopup="dialog" aria-label={`Expense date: ${formatDateLabel(selectedDate)}`} title={formatDateLabel(selectedDate)}><CalendarDays size={20}/><span>{formatDateLabel(selectedDate)}</span></button><button className="log-btn" onClick={handleAddExpense} disabled={savingExpense || !nlpInput.trim()}>
-                        Add expense
-                    </button></div>
-                </div>
+                <ExpenseComposer history={expenses} category={selectedCat} date={selectedDate.toISOString()} dateLabel={formatDateLabel(selectedDate)}
+                    onCategory={() => setIsCatSheetOpen(true)} onDate={() => setIsDateSheetOpen(true)}
+                    onSave={(entries, requestId) => addExpenses(entries, selectedDate, requestId)}
+                    onSaved={() => { setSelectedCat(''); setSelectedDate(new Date()); }}/>
 
                 <section className="wallet-overview"><span className="eyebrow">{new Date().toLocaleDateString('en-IN',{month:'long'})} AT A GLANCE</span><div className="wallet-number">Rs. {spent.toLocaleString('en-IN',{maximumFractionDigits:2})}</div><div className="wallet-overview-footer"><span>Spent this month</span><span>{budget ? remainingDisplay : 'No budget set'}</span></div><div className="budget-track"><span style={{width:`${budget?Math.min(100,spent/budget*100):0}%`,background:remainingOver?'#bb7354':undefined}}/></div><p className="field-help" style={{marginBottom:0}}>{budget?`Your monthly limit is Rs. ${budget.toLocaleString('en-IN')}.`:'Set a spending limit in Profile when you’re ready.'}</p><div className="wallet-links"><button onClick={()=>setCurrentScreen('logs')}>View transactions <ArrowUpRight size={16} aria-hidden="true"/></button><button onClick={()=>setCurrentScreen('dashboard')}>See spending insights <ArrowUpRight size={16} aria-hidden="true"/></button></div></section>
 

@@ -4,6 +4,8 @@ import { query } from '../db/client.js';
 import { toTitleCase } from '../utils/format.js';
 
 import { cents } from '../utils/money.js';
+import { transaction } from '../db/transaction.js';
+import { validateExpenseBatch, saveExpenseBatch } from '../utils/expenseBatch.js';
 const router = express.Router();
 router.use(requireAuth);
 
@@ -48,6 +50,14 @@ router.get('/recents', async (req, res, next) => {
     }
 });
  
+router.post('/batch', async (req, res, next) => {
+    try {
+        const { requestId, entries } = validateExpenseBatch(req.body);
+        const created = await transaction(query => saveExpenseBatch(query, getUserId(req), requestId, entries));
+        res.json(created);
+    } catch (err) { next(err); }
+});
+
 router.post('/', async (req, res, next) => {
     try {
         const userId = getUserId(req);

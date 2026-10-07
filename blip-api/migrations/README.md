@@ -1,5 +1,18 @@
 # Database updates
 
+## Wallet batch entry (006)
+
+Apply `006_wallet_expense_batches.sql` before deploying the new Wallet entry flow.
+`npm run migrate` and `neon-manual.sql` include this migration. It adds durable,
+per-user request receipts so concurrent or repeated batch saves cannot duplicate
+expenses. Expenses and their Activity events commit in one transaction.
+
+Wallet accepts `40 bread, 100 tea, 200 pizza, 20 cookie` (commas, semicolons,
+or new lines), with editable previews and separate/combined saving. Addition
+such as `40 + 100 + 200 + 20 snacks` produces one Rs. 360 expense. Amounts may
+come before or after names. Combined entries store one name, category and total;
+item details are not stored separately. Each request is limited to 50 entries.
+
 ## Multiple payers (005)
 
 Before running the updated API, apply **`005_multiple_payers.sql`** to each
@@ -13,7 +26,7 @@ preserved. A bill still counts once in totals; settlements and undo apply to the
 actual payer balances. Run `npm run check:db` after applying the SQL.
 
 For a database missing earlier migrations, use `neon-manual.sql`, which includes
-001–005. All migrations are rerunnable. Apply 004 before 005 if running individual
+001–006. All migrations are rerunnable. Apply 004 before 005 if running individual
 files; rerunning 004 alone replaces the balance view, so always finish with 005.
 
 ## Latest update: any-amount payments (004)
@@ -29,7 +42,7 @@ This records payments only; Blip does not transfer money.
 A read-only check of the configured Neon database confirmed that monthly budgets
 and the Wallet activity trigger are installed; only the new payment credit table
 and balance view were missing. This update has **not** been applied to a hosted
-database by Codex. The full `neon-manual.sql` includes all five migrations and is
+database by Codex. The full `neon-manual.sql` includes all six migrations and is
 also safe to rerun if you are unsure which migrations Supabase has.
 
 ## Monthly budgets (003)
@@ -53,8 +66,8 @@ are code changes. The latest any-amount payment controls require migration 004.
 ## Full manual database migration
 
 For a database without earlier migrations, `neon-manual.sql` combines 001, 002,
-003, 004, and 005. It contains no credentials and is safe to rerun.
-Existing installations with 001–004 can run just 005 for this update.
+003, 004, 005, and 006. It contains no credentials and is safe to rerun.
+Existing installations with 001–005 can run just 006 for Wallet batch entry.
 
 Existing ten-digit Indian phone numbers remain unchanged for compatibility with
 the old app. New numbers use international format. A canonical unique index

@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import pg from 'pg';
@@ -317,6 +318,49 @@ test('social routes and migration against isolated PostgreSQL', { skip: !url }, 
             const income=await request('/income',{amount:5,description:'Income API test'});
             assert.equal(income.status,200);
             assert.ok((await request('/notifications')).data.some(n=>n.type==='wallet_insert'&&n.metadata?.expenseId===income.data.transaction.id));
+        });
+        await t.test('wallet batches save atomically and concurrent retries never duplicate entries', async () => {
+            const payload = { requestId: randomUUID(), expenses: ['bread','tea','pizza','cookie'].map((description,index) => ({ description, amount:[40,100,200,20][index], category:'Food', date:'2026-10-07T06:15:00.000Z' })) };
+            const [first, retry] = await Promise.all([request('/expenses/batch', payload), request('/expenses/batch', payload)]);
+            assert.equal(first.status, 200, JSON.stringify(first.data));
+            assert.equal(retry.status, 200, JSON.stringify(retry.data));
+            assert.deepEqual(first.data.map(item=>item.id), retry.data.map(item=>item.id));
+            assert.equal(first.data.length, 4);
+            assert.equal(first.data.reduce((total,item)=>total+Number(item.amount),0), 360);
+            const ids = first.data.map(item=>item.id);
+            assert.equal((await pool.query("SELECT * FROM notifications WHERE type='wallet_insert' AND metadata->>'expenseId'=ANY($1::text[])", [ids])).rows.length, 4);
+            assert.ok(first.data.every(item=>item.user_id==='a'));
+            assert.ok(!(await request('/expenses',null,'b')).data.some(item=>ids.includes(item.id)));
+            const conflict = await request('/expenses/batch', { ...payload, expenses:[{...payload.expenses[0], amount:99}] });
+            assert.equal(conflict.status, 409);
+            // An identical key from a different account cannot expose or overwrite these rows.
+            const other = await request('/expenses/batch', payload, 'b');
+            assert.equal(other.status, 200);
+            assert.ok(other.data.every(item=>item.user_id==='b' && !ids.includes(item.id)));
+            // Replaying after an edit/deletion returns current state without resurrecting it.
+            await request(`/expenses/${ids[0]}`, { amount:41 }, 'a', 'PATCH');
+            await request(`/expenses/${ids[1]}`, null, 'a', 'DELETE');
+            const replay = await request('/expenses/batch', payload);
+            assert.equal(replay.data.length, 3);
+            assert.equal(Number(replay.data.find(item=>item.id===ids[0]).amount), 41);
+            assert.ok(!replay.data.some(item=>item.id===ids[1]));
+        });
+        await t.test('invalid batches and database failures leave no partial expenses or receipt', async () => {
+            const payload = { requestId:randomUUID(), expenses:[{description:'Batch valid',amount:1,category:'Food',date:'2026-10-07T00:00:00Z'},{description:'Batch invalid',amount:-1,category:'Food',date:'2026-10-07T00:00:00Z'}] };
+            assert.equal((await request('/expenses/batch',payload)).status,400);
+            assert.equal((await pool.query('SELECT * FROM wallet_expense_batches WHERE request_id=$1',[payload.requestId])).rows.length,0);
+            const before = Number((await pool.query('SELECT count(*) FROM expenses')).rows[0].count);
+            // Force a database rejection, beyond request validation, to exercise transaction rollback.
+            await pool.query("ALTER TABLE expenses ADD CONSTRAINT test_batch_failure CHECK (description <> 'Batch Database Failure')");
+            const failure = { ...payload, expenses:[payload.expenses[0],{...payload.expenses[0],description:'Batch database failure'}] };
+            try {
+                assert.equal((await request('/expenses/batch', failure)).status, 500);
+                assert.equal(Number((await pool.query('SELECT count(*) FROM expenses')).rows[0].count),before);
+                assert.equal((await pool.query('SELECT * FROM wallet_expense_batches WHERE request_id=$1',[payload.requestId])).rows.length,0);
+            } finally { await pool.query('ALTER TABLE expenses DROP CONSTRAINT test_batch_failure'); }
+            const recovered = await request('/expenses/batch',failure);
+            assert.equal(recovered.status,200);
+            assert.equal(recovered.data.length,2);
         });
         await t.test('wallet edits and deletes remain in private activity history', async () => {
             const expense = (await pool.query("INSERT INTO expenses (user_id,amount,category,description) VALUES ('a',50,'Food','Lunch') RETURNING id")).rows[0];

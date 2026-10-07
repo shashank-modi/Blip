@@ -48,6 +48,7 @@ export const api = {
 
     getExpenses: (month) => request(`/expenses${toQueryString({ month })}`),
     createExpense: (data) => request('/expenses', { method: 'POST', body: JSON.stringify(data) }),
+    createExpenses: (data) => request('/expenses/batch', { method: 'POST', body: JSON.stringify(data) }),
     updateExpense: (id, data) => request(`/expenses/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     deleteExpense: (id) => request(`/expenses/${id}`, { method: 'DELETE' }),
 

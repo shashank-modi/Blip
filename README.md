@@ -37,6 +37,17 @@ Money tracking should take less time than spending the money. Blip combines a qu
 
 You can adjust the category or date before saving.
 
+For several expenses, enter `40 bread, 100 tea, 200 pizza, 20 cookie`.
+Review and edit the items, then save four separate entries or choose **Combine
+into one** and name the Rs. 360 total. Commas, semicolons, and new lines separate
+items. To calculate a single expense directly, enter `40 + 100 + 200 + 20 snacks`.
+Amounts also work after names. Press Ctrl/Cmd+Enter to save from the input.
+
+Before using batch entry, apply
+[`006_wallet_expense_batches.sql`](blip-api/migrations/006_wallet_expense_batches.sql)
+to each configured database. It makes saves atomic and prevents duplicate entries
+on retries. Hosted migrations remain a manual step for the account owner.
+
 Shared expense entry opens as a full page on phones and a dialog on desktop. From Friends, choose the people first; inside a friend or group, that context is already selected. Enter a description and amount, then tap **Shared by** to check only the people involved. Equal splitting is the default. **By shares** accepts zero, and **Exact amounts** keeps entered amounts fixed while blank fields divide the remainder automatically.
 
 Group members can connect as friends directly from **People** or group settings.

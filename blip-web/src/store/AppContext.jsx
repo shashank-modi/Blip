@@ -1,4 +1,5 @@
 import { suggestCategory, expenseCategories } from '../utils/categories';
+import { parseExpenseInput } from '../utils/expenseInput.js';
 import { disablePush } from '../lib/pwa';
 import { monthKey, expensesForMonth } from '../utils/month';
 import { createContext, useContext, useMemo, useState, useEffect, useCallback, useRef } from 'react';
@@ -405,47 +406,37 @@ export const AppProvider = ({ children }) => {
         } catch (err) { setNotificationError(err.message); return false; }
     };
 
-    // ── NLP parser ────────────────────────────────────────────────────────────
-    const parseExpenseInput = (input) => {
-        const parts = input.trim().split(/\s+/);
-        if (!parts.length) return null;
-        const first = parseFloat(parts[0]);
-        if (!isNaN(first) && first > 0) return { amount: first, title: parts.slice(1).join(' ') };
-        const last = parseFloat(parts[parts.length - 1]);
-        if (!isNaN(last) && last > 0) return { amount: last, title: parts.slice(0, -1).join(' ') };
-        return null;
-    };
-
     // ── EXPENSES ──────────────────────────────────────────────────────────────
-
-    const addExpenseNLP = async (inputStr, selectedCategory, selectedDate) => {
-        const parsed = parseExpenseInput(inputStr);
-        if (!parsed) return false;
-        let { amount, title: description } = parsed;
-        description = toTitleCase(description || 'Manual Entry');
-        const bestCat = selectedCategory || suggestCategory(description, expenses) || 'General';
-        const dateStr = selectedDate ? new Date(selectedDate).toISOString() : new Date().toISOString();
-
-        const tempId = `temp-${Date.now()}`;
-        const tempExp = { id: tempId, amount, description, category: bestCat, date: dateStr};
-
+    const addExpenses = async (entries, selectedDate, requestId = crypto.randomUUID()) => {
         if (!window.navigator.onLine) {
             toast.error("Can't save while offline. Please reconnect.");
             return false;
         }
-        setExpenses(prev => [tempExp, ...prev]);
-
         try {
-            const created = await api.createExpense({ amount, description, category: bestCat, date: dateStr });
-            setExpenses(prev => prev.map(e => e.id === tempId ? normalizeExpense(created) : e));
+            const date = selectedDate ? new Date(selectedDate).toISOString() : new Date().toISOString();
+            const created = await api.createExpenses({ requestId, expenses: entries.map(entry => ({ ...entry, date })) });
+            const ids = new Set(created.map(entry => String(entry.id)));
+            setExpenses(previous => [...created.map(normalizeExpense), ...previous.filter(entry => !ids.has(String(entry.id)))]);
             void refreshNotifications(true);
-            triggerFlow('expense', amount);
+            triggerFlow('expense', entries.reduce((total, entry) => total + Math.round(entry.amount * 100), 0) / 100);
             return true;
         } catch (err) {
-            setErrorFrom(err, 'Failed to add expense');
-            setExpenses(prev => prev.filter(e => e.id !== tempId));
+            setErrorFrom(err, 'Failed to add expenses');
             return false;
         }
+    };
+
+    const addExpenseNLP = async (inputStr, selectedCategory, selectedDate) => {
+        const parsed = parseExpenseInput(inputStr);
+        if (!parsed.valid) {
+            toast.error(parsed.errors[0] || 'Enter an amount and name.');
+            return false;
+        }
+        return addExpenses(parsed.items.map(item => ({
+            amount: item.amount,
+            description: item.title,
+            category: selectedCategory || suggestCategory(item.title, expenses) || 'General',
+        })), selectedDate);
     };
 
     const deleteExpense = async (id) => {
@@ -994,6 +985,7 @@ export const AppProvider = ({ children }) => {
         celebration, dismissCelebration,
 
         addExpenseNLP,
+        addExpenses,
         addIncome,
         deleteExpense,
         updateExpense,

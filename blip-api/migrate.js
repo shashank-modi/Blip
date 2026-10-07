@@ -34,7 +34,7 @@ try {
         ) duplicate_numbers`);
         console.log('Phone identity collisions:', collisions.rows[0].collisions);
     } else {
-        for (const file of ['001_social_fixes.sql', '002_activity_push.sql', '003_monthly_budgets.sql', '004_payment_credits.sql', '005_multiple_payers.sql']) {
+        for (const file of ['001_social_fixes.sql', '002_activity_push.sql', '003_monthly_budgets.sql', '004_payment_credits.sql', '005_multiple_payers.sql', '006_wallet_expense_batches.sql']) {
             await client.query(await readFile(new URL(`./migrations/${file}`, import.meta.url), 'utf8'));
         }
         console.log(`Social fixes migration complete (${target})`);

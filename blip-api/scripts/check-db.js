@@ -6,7 +6,8 @@ const target = host.endsWith('.neon.tech') ? 'Neon' : host.includes('supabase') 
 console.log(`Checking DATABASE_URL (${target}); read-only, credentials hidden.`);
 try {
     const result = await pool.query({
-        text: `SELECT to_regclass('public.expense_payers') IS NOT NULL AS expense_payers,
+        text: `SELECT to_regclass('public.wallet_expense_batches') IS NOT NULL AS wallet_expense_batches,
+            to_regclass('public.expense_payers') IS NOT NULL AS expense_payers,
             to_regclass('public.expense_debts') IS NOT NULL AS expense_debts,
             to_regclass('public.debt_settlement_allocations') IS NOT NULL AS debt_settlement_allocations,
             to_regclass('public.settlement_credits') IS NOT NULL AS settlement_credits,
